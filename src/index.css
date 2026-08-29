@@ -1038,6 +1038,17 @@ input[type="number"]:focus {
   margin-bottom: 0.75rem;
 }
 
+.theme-picker-actions .btn {
+  padding: 0.5rem 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.15;
+  min-height: 2.4rem;
+  height: 100%;
+  white-space: nowrap;
+  border-radius: var(--radius-xs);
+}
+
 .theme-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1051,9 +1062,9 @@ input[type="number"]:focus {
 
 .theme-chip {
   font-family: inherit;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  padding: 0.45rem 0.35rem;
+  padding: 0.5rem 0.4rem;
   border-radius: var(--radius-xs);
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.03);
