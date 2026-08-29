@@ -71,19 +71,120 @@ function allGuessesComplete(room: RoomState): boolean {
 }
 
 function scoreRound(room: RoomState): void {
-  if (!room.round) return;
-  const tops = room.round.questions.map((_, i) =>
-    getTopPlayerForQuestion(room.players, room.round!.rankings, i)
-  );
+  if (!room.round?.winners) return;
 
   room.players = room.players.map((p) => {
     const byPlayer = room.round!.guesses[p.id] ?? {};
     let gained = 0;
     for (let i = 0; i < room.round!.questions.length; i++) {
-      if (byPlayer[String(i)] === tops[i]) gained += 1;
+      const key = String(i);
+      if (byPlayer[key] === room.round!.winners![key]) gained += 1;
     }
     return { ...p, score: p.score + gained };
   });
+}
+
+function isPlayerRankingComplete(
+  playerRankings: Record<string, string[]> | undefined,
+  questionCount: number
+): boolean {
+  if (!playerRankings) return false;
+  for (let i = 0; i < questionCount; i++) {
+    const order = playerRankings[String(i)];
+    if (!order?.length) return false;
+  }
+  return true;
+}
+
+function isPlayerGuessesComplete(
+  playerGuesses: Record<string, string> | undefined,
+  questionCount: number
+): boolean {
+  if (!playerGuesses) return false;
+  for (let i = 0; i < questionCount; i++) {
+    if (!playerGuesses[String(i)]) return false;
+  }
+  return true;
+}
+
+function computeWinners(room: RoomState): Record<string, string> {
+  if (!room.round) return {};
+  const winners: Record<string, string> = {};
+  for (let i = 0; i < room.round.questions.length; i++) {
+    const top = getTopPlayerForQuestion(room.players, room.round.rankings, i);
+    if (top) winners[String(i)] = top;
+  }
+  return winners;
+}
+
+function finalizeRankingPhase(room: RoomState): RoomState {
+  if (!room.round) return room;
+  room.round.winners = computeWinners(room);
+  room.phase = "guess";
+  return room;
+}
+
+function buildProgress(room: RoomState) {
+  if (!room.round) {
+    return { rankingsDone: 0, guessesDone: 0, totalPlayers: room.players.length };
+  }
+  const qCount = room.round.questions.length;
+  return {
+    rankingsDone: room.players.filter((p) =>
+      isPlayerRankingComplete(room.round!.rankings[p.id], qCount)
+    ).length,
+    guessesDone: room.players.filter((p) =>
+      isPlayerGuessesComplete(room.round!.guesses[p.id], qCount)
+    ).length,
+    totalPlayers: room.players.length,
+  };
+}
+
+function sanitizeRoomForPlayer(room: RoomState, viewerId?: string): RoomState {
+  if (!room.round) return room;
+
+  const progress = buildProgress(room);
+
+  if (room.phase === "ranking" && viewerId) {
+    const own = room.round.rankings[viewerId];
+    return {
+      ...room,
+      round: {
+        ...room.round,
+        rankings: own ? { [viewerId]: own } : {},
+        guesses: {},
+        winners: undefined,
+        progress,
+      },
+    };
+  }
+
+  if (room.phase === "guess") {
+    const ownGuesses = viewerId ? room.round.guesses[viewerId] : undefined;
+    return {
+      ...room,
+      round: {
+        ...room.round,
+        rankings: {},
+        guesses:
+          ownGuesses && viewerId ? { [viewerId]: ownGuesses } : {},
+        winners: undefined,
+        progress,
+      },
+    };
+  }
+
+  if (room.phase === "round-end") {
+    return {
+      ...room,
+      round: {
+        ...room.round,
+        progress,
+      },
+    };
+  }
+
+  return room;
 }
 
 function cleanNestedRankings(
@@ -161,7 +262,7 @@ function removePlayerFromRoom(
     };
   } else if (next.phase === "ranking" && next.round) {
     if (allRankingsComplete(next)) {
-      next.phase = "reveal";
+      next = finalizeRankingPhase(next);
     }
   } else if (next.phase === "guess" && next.round) {
     if (allGuessesComplete(next)) {
@@ -189,8 +290,7 @@ function applyRankingTimeout(room: RoomState): RoomState {
       }
     }
   }
-  room.phase = "reveal";
-  return room;
+  return finalizeRankingPhase(room);
 }
 
 function ensureLastSeen(room: RoomState): RoomState {
@@ -437,23 +537,11 @@ export async function handleAction(
       room.round.rankings[payload.playerId][qKey] = order;
 
       if (allRankingsComplete(room)) {
-        room.phase = "reveal";
+        room = finalizeRankingPhase(room);
       }
 
       await saveRoom(room);
-      return room;
-    }
-
-    case "continue": {
-      if (!isHost(room, payload.playerId)) {
-        throw new Error("Seul l'hôte peut continuer");
-      }
-      if (room.phase !== "reveal") {
-        throw new Error("Phase invalide");
-      }
-      room.phase = "guess";
-      await saveRoom(room);
-      return room;
+      return sanitizeRoomForPlayer(room, payload.playerId);
     }
 
     case "guess": {
@@ -488,7 +576,7 @@ export async function handleAction(
       }
 
       await saveRoom(room);
-      return room;
+      return sanitizeRoomForPlayer(room, payload.playerId);
     }
 
     case "next-round": {
@@ -546,7 +634,7 @@ export async function getRoomState(
   if (processed !== room) {
     await saveRoom(processed);
   }
-  return processed;
+  return sanitizeRoomForPlayer(processed, playerId);
 }
 
 export async function getRoomMeta(code: string): Promise<{ exists: boolean }> {

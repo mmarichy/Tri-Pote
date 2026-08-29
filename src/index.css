@@ -653,6 +653,29 @@ input[type="number"] {
   padding: 0.45rem 0.65rem;
 }
 
+.card-highlight {
+  text-align: center;
+  border-color: rgba(167, 139, 250, 0.45);
+  background: rgba(167, 139, 250, 0.1);
+}
+
+.phase-label {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: #a78bfa;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.question-hero {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1.3;
+  color: #fff;
+}
+
 .guess-player-btn {
   display: flex;
   align-items: center;

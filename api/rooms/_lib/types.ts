@@ -1,7 +1,6 @@
 export type Phase =
   | "lobby"
   | "ranking"
-  | "reveal"
   | "guess"
   | "round-end"
   | "game-end";
@@ -20,6 +19,12 @@ export interface RoundState {
   rankings: PlayerRankings;
   guesses: PlayerGuesses;
   rankingDeadline: number;
+  winners?: Record<string, string>;
+  progress?: {
+    rankingsDone: number;
+    guessesDone: number;
+    totalPlayers: number;
+  };
 }
 
 export interface RoomState {
@@ -49,7 +54,6 @@ export type RoomAction =
       questionIndex: number;
       order: string[];
     }
-  | { action: "continue"; playerId: string }
   | {
       action: "guess";
       playerId: string;

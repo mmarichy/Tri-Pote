@@ -1,7 +1,6 @@
 export type Phase =
   | "lobby"
   | "ranking"
-  | "reveal"
   | "guess"
   | "round-end"
   | "game-end";
@@ -34,6 +33,14 @@ export interface RoundState {
   rankings: PlayerRankings;
   guesses: PlayerGuesses;
   rankingDeadline: number;
+  /** Gagnants par question — visible seulement en fin de manche */
+  winners?: Record<string, string>;
+  /** Progression agrégée (sans exposer les classements des autres) */
+  progress?: {
+    rankingsDone: number;
+    guessesDone: number;
+    totalPlayers: number;
+  };
 }
 
 export interface RoomState {
@@ -63,7 +70,6 @@ export type RoomAction =
       questionIndex: number;
       order: string[];
     }
-  | { action: "continue"; playerId: string }
   | {
       action: "guess";
       playerId: string;
