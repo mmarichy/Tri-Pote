@@ -24,11 +24,14 @@ export interface RoundState {
   rankings: PlayerVotes;
   guesses: PlayerVotes;
   rankingDeadline: number;
+  currentQuestionIndex: number;
   winners?: Record<string, string>;
   progress?: {
     rankingsDone: number;
     guessesDone: number;
     totalPlayers: number;
+    currentQuestionIndex: number;
+    totalQuestions: number;
   };
 }
 
@@ -40,11 +43,13 @@ export interface RoomState {
   totalRounds: number;
   currentRound: number;
   usedQuestions: number[];
+  questionsPerRound: number;
   round: RoundState | null;
   lastSeen: Record<string, number>;
 }
 
-export const QUESTIONS_PER_ROUND = 4;
+export const DEFAULT_QUESTIONS_PER_ROUND = 4;
+export const MAX_QUESTIONS_PER_ROUND = 20;
 export const RANKING_TIMEOUT_MS = 60_000;
 export const PLAYER_INACTIVE_MS = 90_000;
 
@@ -52,7 +57,7 @@ export type RoomAction =
   | { action: "join"; name: string }
   | { action: "leave"; playerId: string }
   | { action: "kick"; playerId: string; targetId: string }
-  | { action: "start"; playerId: string; totalRounds: number }
+  | { action: "start"; playerId: string; totalRounds: number; questionsPerRound: number }
   | {
       action: "rank";
       playerId: string;

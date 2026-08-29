@@ -11,7 +11,8 @@ import {
 import type { Player, QuestionItem, RoomAction, RoomState } from "./types.js";
 import {
   PLAYER_INACTIVE_MS,
-  QUESTIONS_PER_ROUND,
+  DEFAULT_QUESTIONS_PER_ROUND,
+  MAX_QUESTIONS_PER_ROUND,
   RANKING_TIMEOUT_MS,
 } from "./types.js";
 import { deleteRoom, getRoom, roomExists, saveRoom } from "./store.js";
@@ -28,9 +29,67 @@ function loadQuestions(): QuestionItem[] {
 
 function assertQuestions() {
   const questions = loadQuestions();
-  if (questions.length < 4) {
-    throw new Error("Il faut au moins 4 questions dans questions.json");
+  if (questions.length < 1) {
+    throw new Error("Il faut au moins 1 question dans questions.json");
   }
+}
+
+function countAnsweredForQuestion(
+  room: RoomState,
+  questionIndex: number,
+  phase: "ranking" | "guess"
+): number {
+  if (!room.round) return 0;
+  const key = String(questionIndex);
+  const data =
+    phase === "ranking" ? room.round.rankings : room.round.guesses;
+  return room.players.filter((p) => data[p.id]?.[key]).length;
+}
+
+function allAnsweredCurrentQuestion(
+  room: RoomState,
+  phase: "ranking" | "guess"
+): boolean {
+  if (!room.round) return false;
+  return (
+    countAnsweredForQuestion(
+      room,
+      room.round.currentQuestionIndex,
+      phase
+    ) === room.players.length
+  );
+}
+
+function advanceRankingQuestion(room: RoomState): RoomState {
+  if (!room.round) return room;
+  const nextIndex = room.round.currentQuestionIndex + 1;
+  if (nextIndex >= room.round.questions.length) {
+    return finalizeRankingPhase(room);
+  }
+  return {
+    ...room,
+    round: {
+      ...room.round,
+      currentQuestionIndex: nextIndex,
+      rankingDeadline: Date.now() + RANKING_TIMEOUT_MS,
+    },
+  };
+}
+
+function advanceGuessQuestion(room: RoomState): RoomState {
+  if (!room.round) return room;
+  const nextIndex = room.round.currentQuestionIndex + 1;
+  if (nextIndex >= room.round.questions.length) {
+    scoreRound(room);
+    return { ...room, phase: "round-end" };
+  }
+  return {
+    ...room,
+    round: {
+      ...room.round,
+      currentQuestionIndex: nextIndex,
+    },
+  };
 }
 
 function isHost(room: RoomState, playerId: string): boolean {
@@ -39,33 +98,6 @@ function isHost(room: RoomState, playerId: string): boolean {
 
 function findPlayer(room: RoomState, playerId: string): Player | undefined {
   return room.players.find((p) => p.id === playerId);
-}
-
-function allRankingsComplete(room: RoomState): boolean {
-  if (!room.round) return false;
-  const qCount = room.round.questions.length;
-  return room.players.every((p) =>
-    isPlayerVotesComplete(room.round!.rankings[p.id], qCount)
-  );
-}
-
-function allGuessesComplete(room: RoomState): boolean {
-  if (!room.round) return false;
-  const qCount = room.round.questions.length;
-  return room.players.every((p) =>
-    isPlayerVotesComplete(room.round!.guesses[p.id], qCount)
-  );
-}
-
-function isPlayerVotesComplete(
-  entries: Record<string, string> | undefined,
-  questionCount: number
-): boolean {
-  if (!entries) return false;
-  for (let i = 0; i < questionCount; i++) {
-    if (!entries[String(i)]) return false;
-  }
-  return true;
 }
 
 function scoreRound(room: RoomState): void {
@@ -80,20 +112,6 @@ function scoreRound(room: RoomState): void {
     }
     return { ...p, score: p.score + gained };
   });
-}
-
-function isPlayerRankingComplete(
-  playerRankings: Record<string, string> | undefined,
-  questionCount: number
-): boolean {
-  return isPlayerVotesComplete(playerRankings, questionCount);
-}
-
-function isPlayerGuessesComplete(
-  playerGuesses: Record<string, string> | undefined,
-  questionCount: number
-): boolean {
-  return isPlayerVotesComplete(playerGuesses, questionCount);
 }
 
 function computeWinners(room: RoomState): Record<string, string> {
@@ -126,23 +144,29 @@ function computeWinners(room: RoomState): Record<string, string> {
 function finalizeRankingPhase(room: RoomState): RoomState {
   if (!room.round) return room;
   room.round.winners = computeWinners(room);
+  room.round.currentQuestionIndex = 0;
   room.phase = "guess";
   return room;
 }
 
 function buildProgress(room: RoomState) {
   if (!room.round) {
-    return { rankingsDone: 0, guessesDone: 0, totalPlayers: room.players.length };
+    return {
+      rankingsDone: 0,
+      guessesDone: 0,
+      totalPlayers: room.players.length,
+      currentQuestionIndex: 0,
+      totalQuestions: 0,
+    };
   }
+  const idx = room.round.currentQuestionIndex;
   const qCount = room.round.questions.length;
   return {
-    rankingsDone: room.players.filter((p) =>
-      isPlayerRankingComplete(room.round!.rankings[p.id], qCount)
-    ).length,
-    guessesDone: room.players.filter((p) =>
-      isPlayerGuessesComplete(room.round!.guesses[p.id], qCount)
-    ).length,
+    rankingsDone: countAnsweredForQuestion(room, idx, "ranking"),
+    guessesDone: countAnsweredForQuestion(room, idx, "guess"),
     totalPlayers: room.players.length,
+    currentQuestionIndex: idx,
+    totalQuestions: qCount,
   };
 }
 
@@ -263,13 +287,20 @@ function removePlayerFromRoom(
       players: players.map((p) => ({ ...p, score: 0 })),
     };
   } else if (next.phase === "ranking" && next.round) {
-    if (allRankingsComplete(next)) {
-      next = finalizeRankingPhase(next);
+    while (
+      next.phase === "ranking" &&
+      next.round &&
+      allAnsweredCurrentQuestion(next, "ranking")
+    ) {
+      next = advanceRankingQuestion(next);
     }
   } else if (next.phase === "guess" && next.round) {
-    if (allGuessesComplete(next)) {
-      scoreRound(next);
-      next.phase = "round-end";
+    while (
+      next.phase === "guess" &&
+      next.round &&
+      allAnsweredCurrentQuestion(next, "guess")
+    ) {
+      next = advanceGuessQuestion(next);
     }
   }
 
@@ -280,20 +311,29 @@ function applyRankingTimeout(room: RoomState): RoomState {
   if (room.phase !== "ranking" || !room.round) return room;
   if (Date.now() < room.round.rankingDeadline) return room;
 
+  const idx = room.round.currentQuestionIndex;
   const playerIds = room.players.map((p) => p.id);
+  const key = String(idx);
+
   for (const player of room.players) {
     if (!room.round.rankings[player.id]) {
       room.round.rankings[player.id] = {};
     }
-    for (let i = 0; i < room.round.questions.length; i++) {
-      const key = String(i);
-      if (!room.round.rankings[player.id][key]) {
-        room.round.rankings[player.id][key] =
-          playerIds[Math.floor(Math.random() * playerIds.length)];
-      }
+    if (!room.round.rankings[player.id][key]) {
+      room.round.rankings[player.id][key] =
+        playerIds[Math.floor(Math.random() * playerIds.length)];
     }
   }
-  return finalizeRankingPhase(room);
+
+  let next = room;
+  while (
+    next.phase === "ranking" &&
+    next.round &&
+    allAnsweredCurrentQuestion(next, "ranking")
+  ) {
+    next = advanceRankingQuestion(next);
+  }
+  return next;
 }
 
 function ensureLastSeen(room: RoomState): RoomState {
@@ -336,6 +376,12 @@ function processRoom(
   activePlayerId?: string
 ): RoomState | null {
   let next = ensureLastSeen(room);
+  if (next.questionsPerRound === undefined) {
+    next.questionsPerRound = DEFAULT_QUESTIONS_PER_ROUND;
+  }
+  if (next.round && next.round.currentQuestionIndex === undefined) {
+    next.round.currentQuestionIndex = 0;
+  }
   if (activePlayerId) {
     next = touchPresence(next, activePlayerId);
   }
@@ -356,8 +402,9 @@ function startRound(room: RoomState): RoomState {
   const pool = loadQuestions();
   const roundQuestions: QuestionItem[] = [];
   const used = [...room.usedQuestions];
+  const count = room.questionsPerRound;
 
-  for (let i = 0; i < QUESTIONS_PER_ROUND; i++) {
+  for (let i = 0; i < count; i++) {
     const item = pickQuestion(pool, used);
     if (!item) break;
     roundQuestions.push(item);
@@ -376,8 +423,8 @@ function startRound(room: RoomState): RoomState {
       questions: roundQuestions,
       rankings: {},
       guesses: {},
-      rankingDeadline:
-        Date.now() + RANKING_TIMEOUT_MS * roundQuestions.length,
+      currentQuestionIndex: 0,
+      rankingDeadline: Date.now() + RANKING_TIMEOUT_MS,
     },
   };
 }
@@ -407,6 +454,7 @@ export async function createRoom(hostName: string): Promise<RoomState> {
     totalRounds: 5,
     currentRound: 0,
     usedQuestions: [],
+    questionsPerRound: DEFAULT_QUESTIONS_PER_ROUND,
     round: null,
     lastSeen: { [hostId]: now },
   };
@@ -495,8 +543,17 @@ export async function handleAction(
       if (payload.totalRounds < 1) {
         throw new Error("Il faut au moins 1 manche");
       }
+      if (payload.questionsPerRound < 1) {
+        throw new Error("Il faut au moins 1 question par manche");
+      }
+      if (payload.questionsPerRound > MAX_QUESTIONS_PER_ROUND) {
+        throw new Error(
+          `Maximum ${MAX_QUESTIONS_PER_ROUND} questions par manche`
+        );
+      }
 
       room.totalRounds = payload.totalRounds;
+      room.questionsPerRound = payload.questionsPerRound;
       room.currentRound = 1;
       room.players = room.players.map((p) => ({ ...p, score: 0 }));
       room.usedQuestions = [];
@@ -514,6 +571,9 @@ export async function handleAction(
       }
 
       const qIndex = payload.questionIndex;
+      if (qIndex !== room.round.currentQuestionIndex) {
+        throw new Error("Ce n'est pas la question en cours");
+      }
       if (qIndex < 0 || qIndex >= room.round.questions.length) {
         throw new Error("Question invalide");
       }
@@ -531,8 +591,8 @@ export async function handleAction(
 
       room.round.rankings[payload.playerId][qKey] = payload.votedPlayerId;
 
-      if (allRankingsComplete(room)) {
-        room = finalizeRankingPhase(room);
+      if (allAnsweredCurrentQuestion(room, "ranking")) {
+        room = advanceRankingQuestion(room);
       }
 
       await saveRoom(room);
@@ -548,6 +608,9 @@ export async function handleAction(
       }
 
       const qIndex = payload.questionIndex;
+      if (qIndex !== room.round.currentQuestionIndex) {
+        throw new Error("Ce n'est pas la question en cours");
+      }
       if (qIndex < 0 || qIndex >= room.round.questions.length) {
         throw new Error("Question invalide");
       }
@@ -565,9 +628,8 @@ export async function handleAction(
 
       room.round.guesses[payload.playerId][qKey] = payload.guessedPlayerId;
 
-      if (allGuessesComplete(room)) {
-        scoreRound(room);
-        room.phase = "round-end";
+      if (allAnsweredCurrentQuestion(room, "guess")) {
+        room = advanceGuessQuestion(room);
       }
 
       await saveRoom(room);

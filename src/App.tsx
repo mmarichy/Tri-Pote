@@ -8,13 +8,11 @@ import {
   sendAction,
 } from "./api/client";
 import {
-  countCompletedGuesses,
-  countCompletedRankings,
-  nextPendingIndex,
   normalizeRoomCode,
 } from "../shared/game";
+import { DEFAULT_QUESTIONS_PER_ROUND, MAX_QUESTIONS_PER_ROUND } from "./types";
 import { useRoom } from "./hooks/useRoom";
-import type { Player, QuestionItem, RoomState, Session } from "./types";
+import type { Player, RoomState, Session } from "./types";
 import { clearRoomUrl, getRoomCodeFromUrl, redirectQueryRoomToPath, roomUrl, setRoomUrl } from "./url";
 
 function RoomCodeBanner({ code }: { code: string }) {
@@ -219,11 +217,14 @@ function LobbyScreen({
   room: RoomState;
   playerId: string;
   isHost: boolean;
-  onStart: (rounds: number) => Promise<void>;
+  onStart: (rounds: number, questionsPerRound: number) => Promise<void>;
   onKick: (targetId: string) => Promise<void>;
   onLeave: () => void;
 }) {
   const [rounds, setRounds] = useState(room.totalRounds);
+  const [questionsPerRound, setQuestionsPerRound] = useState(
+    room.questionsPerRound ?? DEFAULT_QUESTIONS_PER_ROUND
+  );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [kickingId, setKickingId] = useState<string | null>(null);
@@ -232,7 +233,7 @@ function LobbyScreen({
     setBusy(true);
     setError("");
     try {
-      await onStart(rounds);
+      await onStart(rounds, questionsPerRound);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
     } finally {
@@ -291,6 +292,19 @@ function LobbyScreen({
             value={rounds}
             onChange={(e) => setRounds(Number(e.target.value))}
           />
+          <label htmlFor="questions">Questions par manche</label>
+          <input
+            id="questions"
+            type="number"
+            min={1}
+            max={MAX_QUESTIONS_PER_ROUND}
+            value={questionsPerRound}
+            onChange={(e) => setQuestionsPerRound(Number(e.target.value))}
+          />
+          <p className="hint hint--compact">
+            Les questions s'affichent une par une — tout le monde doit répondre
+            avant de passer à la suivante.
+          </p>
           {error && <p className="error">{error}</p>}
           <button
             className="btn btn-primary"
@@ -331,34 +345,49 @@ function CountdownTimer({ deadline }: { deadline: number }) {
 
   return (
     <div className={`timer ${urgent ? "timer-urgent" : ""}`}>
-      ⏱ {seconds}s pour classer
+      ⏱ {seconds}s pour répondre
     </div>
   );
 }
 
-function QuestionList({
-  questions,
-  activeIndex,
-  completedIndices,
+function QuestionProgress({
+  current,
+  total,
 }: {
-  questions: QuestionItem[];
-  activeIndex?: number;
-  completedIndices?: Set<number>;
+  current: number;
+  total: number;
 }) {
   return (
-    <div className="question-list">
-      {questions.map((q, i) => (
-        <div
-          key={q.id}
-          className={`question-big ${activeIndex === i ? "active" : ""} ${completedIndices?.has(i) ? "done" : ""}`}
-        >
-          <span className="question-num">{i + 1}</span>
-          <div className="question-big-content">
-            <span className="theme-badge">{q.theme}</span>
-            <p>{q.question}</p>
-          </div>
-        </div>
+    <div className="question-progress" aria-label={`Question ${current + 1} sur ${total}`}>
+      {Array.from({ length: total }).map((_, i) => (
+        <span
+          key={i}
+          className={`question-progress-dot ${i < current ? "done" : ""} ${i === current ? "active" : ""}`}
+        />
       ))}
+    </div>
+  );
+}
+
+function WaitingForOthers({
+  emoji,
+  message,
+  done,
+  total,
+}: {
+  emoji: string;
+  message: string;
+  done: number;
+  total: number;
+}) {
+  return (
+    <div className="waiting-banner">
+      <div className="emoji">{emoji}</div>
+      <p>{message}</p>
+      <p className="hint">
+        En attente des autres ({done}/{total})…
+      </p>
+      <p className="hint">La question suivante arrive dès que tout le monde a répondu.</p>
     </div>
   );
 }
@@ -373,22 +402,17 @@ function RankingScreen({
   onVote: (questionIndex: number, votedPlayerId: string) => Promise<void>;
 }) {
   const questions = room.round?.questions ?? [];
+  const currentIndex = room.round?.currentQuestionIndex ?? 0;
   const playerVotes = room.round?.rankings[playerId];
-  const completed = new Set<number>();
-  for (let i = 0; i < questions.length; i++) {
-    if (playerVotes?.[String(i)]) completed.add(i);
-  }
-
-  const currentIndex =
-    nextPendingIndex(playerVotes, questions.length) ?? questions.length - 1;
-  const allDone =
-    countCompletedRankings(playerVotes, questions.length) === questions.length;
+  const progress = room.round?.progress;
+  const hasAnswered = Boolean(playerVotes?.[String(currentIndex)]);
+  const currentQuestion = questions[currentIndex];
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const handleVote = async (votedPlayerId: string) => {
-    if (allDone) return;
+    if (hasAnswered || !currentQuestion) return;
     setBusy(true);
     setError("");
     try {
@@ -400,22 +424,32 @@ function RankingScreen({
     }
   };
 
-  if (allDone) {
-    const progress = room.round?.progress;
+  if (!currentQuestion) {
     return (
       <div className="waiting-banner">
-        <div className="emoji">✅</div>
-        <p>Tous tes votes sont envoyés !</p>
-        <QuestionList questions={questions} completedIndices={completed} />
-        <p className="hint">
-          En attente des autres ({progress?.rankingsDone ?? 0}/
-          {progress?.totalPlayers ?? room.players.length})...
-        </p>
+        <div className="emoji">⏳</div>
+        <p>Passage à la phase suivante…</p>
       </div>
     );
   }
 
-  const currentQuestion = questions[currentIndex];
+  if (hasAnswered) {
+    return (
+      <>
+        <QuestionProgress current={currentIndex} total={questions.length} />
+        <WaitingForOthers
+          emoji="✅"
+          message="Vote enregistré !"
+          done={progress?.rankingsDone ?? 0}
+          total={progress?.totalPlayers ?? room.players.length}
+        />
+        <div className="card card-highlight card-dim">
+          <span className="theme-badge theme-badge-lg">{currentQuestion.theme}</span>
+          <p className="question-hero">{currentQuestion.question}</p>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -423,17 +457,15 @@ function RankingScreen({
         <CountdownTimer deadline={room.round.rankingDeadline} />
       )}
 
+      <QuestionProgress current={currentIndex} total={questions.length} />
+
       <div className="card card-highlight">
-        <p className="phase-label">Question {currentIndex + 1}/{questions.length}</p>
+        <p className="phase-label">
+          Question {currentIndex + 1}/{questions.length}
+        </p>
         <span className="theme-badge theme-badge-lg">{currentQuestion.theme}</span>
         <p className="question-hero">{currentQuestion.question}</p>
       </div>
-
-      <QuestionList
-        questions={questions}
-        activeIndex={currentIndex}
-        completedIndices={completed}
-      />
 
       <div className="card">
         <h2>Qui choisis-tu ?</h2>
@@ -472,22 +504,17 @@ function GuessScreen({
   onGuess: (questionIndex: number, guessedPlayerId: string) => Promise<void>;
 }) {
   const questions = room.round?.questions ?? [];
+  const currentIndex = room.round?.currentQuestionIndex ?? 0;
   const playerGuesses = room.round?.guesses[playerId];
-  const completed = new Set<number>();
-  for (let i = 0; i < questions.length; i++) {
-    if (playerGuesses?.[String(i)]) completed.add(i);
-  }
-
-  const currentIndex =
-    nextPendingIndex(playerGuesses, questions.length) ?? questions.length - 1;
-  const allDone =
-    countCompletedGuesses(playerGuesses, questions.length) === questions.length;
+  const progress = room.round?.progress;
+  const hasAnswered = Boolean(playerGuesses?.[String(currentIndex)]);
+  const currentQuestion = questions[currentIndex];
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const handleGuess = async (guessedPlayerId: string) => {
-    if (allDone) return;
+    if (hasAnswered || !currentQuestion) return;
     setBusy(true);
     setError("");
     try {
@@ -499,36 +526,44 @@ function GuessScreen({
     }
   };
 
-  if (allDone) {
-    const progress = room.round?.progress;
+  if (!currentQuestion) {
     return (
       <div className="waiting-banner">
-        <div className="emoji">🤔</div>
-        <p>Toutes tes réponses sont envoyées !</p>
-        <QuestionList questions={questions} completedIndices={completed} />
-        <p className="hint">
-          En attente des autres ({progress?.guessesDone ?? 0}/
-          {progress?.totalPlayers ?? room.players.length})...
-        </p>
+        <div className="emoji">⏳</div>
+        <p>Calcul des résultats…</p>
       </div>
     );
   }
 
-  const currentQuestion = questions[currentIndex];
+  if (hasAnswered) {
+    return (
+      <>
+        <QuestionProgress current={currentIndex} total={questions.length} />
+        <WaitingForOthers
+          emoji="🤔"
+          message="Réponse enregistrée !"
+          done={progress?.guessesDone ?? 0}
+          total={progress?.totalPlayers ?? room.players.length}
+        />
+        <div className="card card-highlight card-dim">
+          <span className="theme-badge theme-badge-lg">{currentQuestion.theme}</span>
+          <p className="question-hero">{currentQuestion.question}</p>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
+      <QuestionProgress current={currentIndex} total={questions.length} />
+
       <div className="card card-highlight">
-        <p className="phase-label">Question {currentIndex + 1}/{questions.length}</p>
+        <p className="phase-label">
+          Question {currentIndex + 1}/{questions.length}
+        </p>
         <span className="theme-badge theme-badge-lg">{currentQuestion.theme}</span>
         <p className="question-hero">{currentQuestion.question}</p>
       </div>
-
-      <QuestionList
-        questions={questions}
-        activeIndex={currentIndex}
-        completedIndices={completed}
-      />
 
       <div className="card">
         <h2>Qui a été le plus voté ?</h2>
@@ -768,11 +803,12 @@ function GameScreen({
           room={room}
           playerId={session.playerId}
           isHost={isHost}
-          onStart={async (totalRounds) => {
+          onStart={async (totalRounds, questionsPerRound) => {
             await dispatch({
               action: "start",
               playerId: session.playerId,
               totalRounds,
+              questionsPerRound,
             });
           }}
           onKick={async (targetId) => {
