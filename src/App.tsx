@@ -1207,7 +1207,7 @@ export default function App() {
           <div className="logo-mark">🎲</div>
           <div>
             <h1>Tri-Pote</h1>
-            <p className="subtitle">Salons privés entre potes — multijoueur</p>
+            <p className="subtitle">Salons privés multijoueur</p>
           </div>
         </header>
 
