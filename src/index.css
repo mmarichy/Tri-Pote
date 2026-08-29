@@ -267,8 +267,13 @@ h1 {
 .game-top-leave {
   margin-top: 0;
   flex-shrink: 0;
-  padding-left: 0;
+  width: auto;
+  margin-right: auto;
   text-align: left;
+}
+
+.game-top-code {
+  margin-left: auto;
 }
 
 .game-top-code {
