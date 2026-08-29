@@ -413,7 +413,7 @@ function RevealScreen({
     <>
       <div className="card">
         <h2>Classement de la manche</h2>
-        <p className="hint">Résultat des votes — devinez la question !</p>
+        <p className="hint">Résultat des triages — devinez la question !</p>
         <ul className="result-list">
           {results.map((r) => (
             <li
@@ -767,7 +767,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <h1>Vote</h1>
+      <h1>Tri-Pote</h1>
       <p className="subtitle">Salons privés entre potes — multijoueur</p>
 
       {session ? (

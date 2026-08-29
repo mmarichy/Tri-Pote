@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import type { RoomAction } from "../../shared/types";
+import type { RoomAction } from "../_lib/types";
 import { getRoomMeta, getRoomState, handleAction } from "../_lib/rooms";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

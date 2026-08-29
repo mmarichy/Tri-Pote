@@ -6,8 +6,8 @@ import {
   isValidRoomCode,
   normalizeRoomCode,
   pickQuestion,
-} from "../../shared/game";
-import type { Player, RoomAction, RoomState } from "../../shared/types";
+} from "./game";
+import type { Player, RoomAction, RoomState } from "./types";
 import { getRoom, roomExists, saveRoom } from "./store";
 
 const QUESTIONS: string[] = questionsData.questions;

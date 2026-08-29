@@ -1,7 +1,7 @@
 import type { RoomAction, RoomState, Session } from "../../shared/types";
 import { normalizeRoomCode } from "../../shared/game";
 
-const SESSION_KEY = "vote_session";
+const SESSION_KEY = "tri_pote_session";
 
 export function loadSession(): Session | null {
   try {
@@ -23,10 +23,19 @@ export function clearSession(): void {
 
 async function parseError(res: Response): Promise<string> {
   try {
-    const data = (await res.json()) as { error?: string };
-    return data.error ?? "Erreur inconnue";
+    const text = await res.text();
+    try {
+      const data = JSON.parse(text) as { error?: string };
+      if (data.error) return data.error;
+    } catch {
+      /* réponse non-JSON (ex. erreur Vercel HTML) */
+    }
+    if (res.status >= 500) {
+      return "Serveur indisponible — réessaie dans quelques instants.";
+    }
+    return `Erreur ${res.status}`;
   } catch {
-    return "Erreur réseau";
+    return "Erreur réseau — vérifie ta connexion.";
   }
 }
 

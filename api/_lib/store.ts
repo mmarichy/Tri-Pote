@@ -1,5 +1,5 @@
 import { Redis } from "@upstash/redis";
-import type { RoomState } from "../../shared/types";
+import type { RoomState } from "./types";
 
 const memory = new Map<string, RoomState>();
 const TTL_SECONDS = 60 * 60 * 4;
