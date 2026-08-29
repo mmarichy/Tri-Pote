@@ -46,7 +46,6 @@ export interface RoomState {
   questionsPerRound: number;
   selectedThemes: string[];
   round: RoundState | null;
-  lastSeen: Record<string, number>;
 }
 
 export const DEFAULT_QUESTIONS_PER_ROUND = 4;

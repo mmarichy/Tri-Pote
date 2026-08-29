@@ -2,7 +2,9 @@ import { Redis } from "@upstash/redis";
 import type { RoomState } from "./types.js";
 
 const memory = new Map<string, RoomState>();
+const memoryPresence = new Map<string, number>();
 const TTL_SECONDS = 60 * 60 * 4;
+const PRESENCE_TTL_SECONDS = 60 * 10;
 
 function getRedis(): Redis | null {
   try {
@@ -58,4 +60,66 @@ export async function deleteRoom(code: string): Promise<void> {
 export async function roomExists(code: string): Promise<boolean> {
   const room = await getRoom(code);
   return room !== null;
+}
+
+/*
+ * La présence est stockée dans des clés séparées (une par joueur) plutôt que
+ * dans l'objet salon : les sondages fréquents ne réécrivent ainsi jamais
+ * l'état du salon, ce qui évitait d'écraser un départ concurrent.
+ */
+function presenceKey(code: string, playerId: string): string {
+  return `presence:${code}:${playerId}`;
+}
+
+export async function touchPresence(
+  code: string,
+  playerId: string
+): Promise<void> {
+  const redis = getRedis();
+  const key = presenceKey(code, playerId);
+  if (redis) {
+    await redis.set(key, Date.now(), { ex: PRESENCE_TTL_SECONDS });
+    return;
+  }
+  memoryPresence.set(key, Date.now());
+}
+
+/* Pose une "pierre tombale" : le joueur a quitté volontairement (ou a été
+ * expulsé), toute résurrection par une écriture concurrente sera re-purgée. */
+export async function markLeft(
+  code: string,
+  playerId: string
+): Promise<void> {
+  const redis = getRedis();
+  const key = presenceKey(code, playerId);
+  if (redis) {
+    await redis.set(key, 0, { ex: PRESENCE_TTL_SECONDS });
+    return;
+  }
+  memoryPresence.set(key, 0);
+}
+
+export async function getPresenceMap(
+  code: string,
+  playerIds: string[]
+): Promise<Record<string, number | undefined>> {
+  const result: Record<string, number | undefined> = {};
+  if (playerIds.length === 0) return result;
+
+  const redis = getRedis();
+  if (redis) {
+    const values = await redis.mget<(number | null)[]>(
+      ...playerIds.map((id) => presenceKey(code, id))
+    );
+    playerIds.forEach((id, i) => {
+      const value = values[i];
+      result[id] = typeof value === "number" ? value : undefined;
+    });
+    return result;
+  }
+
+  for (const id of playerIds) {
+    result[id] = memoryPresence.get(presenceKey(code, id));
+  }
+  return result;
 }

@@ -62,7 +62,6 @@ export interface RoomState {
   /** Thèmes actifs pour le tirage des questions (réglés par l'hôte au lobby) */
   selectedThemes: string[];
   round: RoundState | null;
-  lastSeen: Record<string, number>;
 }
 
 export const DEFAULT_QUESTIONS_PER_ROUND = 4;

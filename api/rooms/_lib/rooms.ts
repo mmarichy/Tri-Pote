@@ -15,7 +15,15 @@ import {
   MAX_QUESTIONS_PER_ROUND,
   RANKING_TIMEOUT_MS,
 } from "./types.js";
-import { deleteRoom, getRoom, roomExists, saveRoom } from "./store.js";
+import {
+  deleteRoom,
+  getPresenceMap,
+  getRoom,
+  markLeft,
+  roomExists,
+  saveRoom,
+  touchPresence,
+} from "./store.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 
@@ -302,11 +310,6 @@ function removePlayerFromRoom(
 
   let next: RoomState = { ...room, players, hostId };
 
-  if (next.lastSeen) {
-    const { [playerId]: _removed, ...rest } = next.lastSeen;
-    next.lastSeen = rest;
-  }
-
   if (next.round) {
     next = {
       ...next,
@@ -365,34 +368,47 @@ function applyRankingTimeout(room: RoomState): RoomState {
   return finalizeRankingPhase(room);
 }
 
-function ensureLastSeen(room: RoomState): RoomState {
-  if (room.lastSeen) return room;
+/*
+ * Lit la présence de chaque joueur depuis les clés dédiées. Le joueur actif
+ * est rafraîchi, et un joueur sans clé (migration, clé expirée alors que le
+ * salon dormait) reçoit un sursis plutôt qu'une purge immédiate.
+ */
+async function loadPresence(
+  room: RoomState,
+  activePlayerId?: string
+): Promise<Record<string, number>> {
+  const ids = room.players.map((p) => p.id);
+  const stored = await getPresenceMap(room.code, ids);
   const now = Date.now();
-  return {
-    ...room,
-    lastSeen: Object.fromEntries(room.players.map((p) => [p.id, now])),
-  };
+  const presence: Record<string, number> = {};
+  const toTouch: string[] = [];
+
+  for (const id of ids) {
+    const seen = stored[id];
+    if (id === activePlayerId || seen === undefined) {
+      presence[id] = now;
+      toTouch.push(id);
+    } else {
+      presence[id] = seen;
+    }
+  }
+
+  await Promise.all(toTouch.map((id) => touchPresence(room.code, id)));
+  return presence;
 }
 
-function touchPresence(room: RoomState, playerId: string): RoomState {
-  const next = ensureLastSeen(room);
-  if (!findPlayer(next, playerId)) return next;
-  return {
-    ...next,
-    lastSeen: { ...next.lastSeen, [playerId]: Date.now() },
-  };
-}
-
-function applyInactivePlayers(room: RoomState): RoomState | null {
-  const base = ensureLastSeen(room);
+function applyInactivePlayers(
+  room: RoomState,
+  presence: Record<string, number>
+): RoomState | null {
   const now = Date.now();
-  const inactive = base.players.filter((p) => {
-    const seen = base.lastSeen[p.id] ?? 0;
+  const inactive = room.players.filter((p) => {
+    const seen = presence[p.id] ?? 0;
     return now - seen > PLAYER_INACTIVE_MS;
   });
-  if (inactive.length === 0) return base;
+  if (inactive.length === 0) return room;
 
-  let next: RoomState | null = base;
+  let next: RoomState | null = room;
   for (const player of inactive) {
     if (!next) break;
     next = removePlayerFromRoom(next, player.id);
@@ -402,21 +418,35 @@ function applyInactivePlayers(room: RoomState): RoomState | null {
 
 function processRoom(
   room: RoomState,
-  activePlayerId?: string
-): RoomState | null {
-  let next = ensureLastSeen(room);
-  if (next.questionsPerRound === undefined) {
-    next.questionsPerRound = DEFAULT_QUESTIONS_PER_ROUND;
+  presence: Record<string, number>
+): { next: RoomState | null; changed: boolean } {
+  let next = room;
+  let changed = false;
+
+  if (next.questionsPerRound === undefined || next.selectedThemes === undefined) {
+    next = {
+      ...next,
+      questionsPerRound: next.questionsPerRound ?? DEFAULT_QUESTIONS_PER_ROUND,
+      selectedThemes: next.selectedThemes ?? loadAllThemes(),
+    };
+    changed = true;
   }
-  if (next.selectedThemes === undefined) {
-    next.selectedThemes = loadAllThemes();
+
+  const pruned = applyInactivePlayers(next, presence);
+  if (pruned !== next) changed = true;
+  if (!pruned) return { next: null, changed: true };
+  next = pruned;
+
+  const timeoutFires =
+    next.phase === "ranking" &&
+    next.round !== null &&
+    Date.now() >= next.round.rankingDeadline;
+  if (timeoutFires) {
+    next = applyRankingTimeout(next);
+    changed = true;
   }
-  if (activePlayerId) {
-    next = touchPresence(next, activePlayerId);
-  }
-  next = applyInactivePlayers(next);
-  if (!next) return null;
-  return applyRankingTimeout(next);
+
+  return { next, changed };
 }
 
 async function persistRoom(room: RoomState | null, code: string): Promise<void> {
@@ -494,7 +524,6 @@ export async function createRoom(hostName: string): Promise<RoomState> {
   }
 
   const hostId = createId();
-  const now = Date.now();
   const room: RoomState = {
     code,
     hostId,
@@ -506,9 +535,9 @@ export async function createRoom(hostName: string): Promise<RoomState> {
     questionsPerRound: DEFAULT_QUESTIONS_PER_ROUND,
     selectedThemes: loadAllThemes(),
     round: null,
-    lastSeen: { [hostId]: now },
   };
 
+  await touchPresence(code, hostId);
   await saveRoom(room);
   return room;
 }
@@ -527,8 +556,13 @@ export async function handleAction(
 
   const activePlayerId =
     "playerId" in payload ? payload.playerId : undefined;
-  room = processRoom(room, activePlayerId);
-  if (!room) throw new Error("Salon introuvable");
+  const presence = await loadPresence(room, activePlayerId);
+  const processed = processRoom(room, presence).next;
+  if (!processed) {
+    await deleteRoom(normalized);
+    throw new Error("Salon introuvable");
+  }
+  room = processed;
 
   switch (payload.action) {
     case "join": {
@@ -546,7 +580,7 @@ export async function handleAction(
       }
       const newId = createId();
       room.players.push({ id: newId, name, score: 0 });
-      room = touchPresence(room, newId);
+      await touchPresence(normalized, newId);
       await saveRoom(room);
       return room;
     }
@@ -556,6 +590,7 @@ export async function handleAction(
         throw new Error("Joueur inconnu");
       }
       const next = removePlayerFromRoom(room, payload.playerId);
+      await markLeft(normalized, payload.playerId);
       await persistRoom(next, normalized);
       if (!next) throw new Error("Salon fermé");
       return next;
@@ -575,6 +610,7 @@ export async function handleAction(
         throw new Error("Joueur introuvable");
       }
       const next = removePlayerFromRoom(room, payload.targetId);
+      await markLeft(normalized, payload.targetId);
       await persistRoom(next, normalized);
       if (!next) throw new Error("Salon fermé");
       return next;
@@ -788,10 +824,14 @@ export async function getRoomState(
   const room = await getRoom(normalized);
   if (!room) throw new Error("Salon introuvable");
 
-  const processed = processRoom(room, playerId);
-  if (!processed) throw new Error("Salon introuvable");
+  const presence = await loadPresence(room, playerId);
+  const { next: processed, changed } = processRoom(room, presence);
+  if (!processed) {
+    await deleteRoom(normalized);
+    throw new Error("Salon introuvable");
+  }
 
-  if (processed !== room) {
+  if (changed) {
     await saveRoom(processed);
   }
   return sanitizeRoomForPlayer(processed, playerId);
@@ -805,12 +845,13 @@ export async function getRoomMeta(code: string): Promise<{ exists: boolean }> {
   const room = await getRoom(normalized);
   if (!room) return { exists: false };
 
-  const processed = processRoom(room);
+  const presence = await loadPresence(room);
+  const { next: processed, changed } = processRoom(room, presence);
   if (!processed) {
     await deleteRoom(normalized);
     return { exists: false };
   }
-  if (processed !== room) {
+  if (changed) {
     await saveRoom(processed);
   }
   return { exists: true };
