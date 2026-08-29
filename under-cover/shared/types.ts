@@ -55,8 +55,12 @@ export interface RoomState {
 }
 
 export interface PlayerView {
-  role: Role;
   word: string | null;
+}
+
+export interface PublicEliminationReveal {
+  playerId: string;
+  role?: Role;
 }
 
 export interface RoomView {
@@ -72,9 +76,10 @@ export interface RoomView {
   revealAcks: Record<string, boolean>;
   votes: Record<string, string>;
   eliminatedThisRound: string | null;
-  lastEliminated: EliminationReveal | null;
+  lastEliminated: PublicEliminationReveal | null;
   winner: Winner | null;
   me?: PlayerView;
+  revealedRoles?: Record<string, Role>;
 }
 
 export interface Session {

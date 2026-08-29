@@ -8,12 +8,6 @@ const ROLE_LABELS: Record<Role, string> = {
   mrwhite: "Mr. White",
 };
 
-const ROLE_DESCRIPTIONS: Record<Role, string> = {
-  civilian: "Tu connais le mot commun. Trouve l'Undercover !",
-  undercover: "Tu as un mot similaire. Reste discret !",
-  mrwhite: "Tu n'as aucun mot. Improvise et bluffe !",
-};
-
 const WINNER_LABELS = {
   civilians: "Les Civils gagnent !",
   undercover: "L'Undercover gagne !",
@@ -45,23 +39,18 @@ function RevealView({
   const aliveCount = room.players.filter((player) => player.isAlive).length;
 
   if (!me) {
-    return <p className="uc-error">Rôle non disponible</p>;
+    return <p className="uc-error">Mot secret indisponible</p>;
   }
 
   return (
     <div className="space-y-4">
       <div className="uc-card border-undercover-accent/40 text-center">
         <p className="text-sm uppercase tracking-wider text-undercover-accent">
-          Ton rôle
+          Mot secret
         </p>
-        <h2 className="mt-2 font-display text-2xl font-bold">
-          {ROLE_LABELS[me.role]}
-        </h2>
-        <p className="mt-2 text-undercover-muted">{ROLE_DESCRIPTIONS[me.role]}</p>
 
         {me.word ? (
           <div className="mt-6 rounded-xl bg-undercover-surface p-6">
-            <p className="text-sm text-undercover-muted">Ton mot secret</p>
             <p className="mt-2 font-display text-4xl font-bold text-white">
               {me.word}
             </p>
@@ -69,9 +58,15 @@ function RevealView({
         ) : (
           <div className="mt-6 rounded-xl bg-undercover-surface p-6">
             <p className="text-3xl">🤫</p>
-            <p className="mt-2 text-undercover-muted">Aucun mot pour toi</p>
+            <p className="mt-2 text-undercover-muted">
+              Tu n&apos;as pas de mot — improvise !
+            </p>
           </div>
         )}
+
+        <p className="uc-hint mt-4">
+          Ne montre pas ton écran aux autres joueurs.
+        </p>
       </div>
 
       <p className="uc-hint text-center">
@@ -346,17 +341,14 @@ function RoundEndView({
   return (
     <div className="space-y-4">
       <div className="uc-card text-center">
-        {room.eliminatedThisRound && eliminated && room.lastEliminated ? (
+        {room.eliminatedThisRound && eliminated ? (
           <>
             <p className="text-sm text-undercover-muted">Éliminé</p>
             <h2 className="mt-2 font-display text-2xl font-bold text-red-400">
               {eliminated.name}
             </h2>
-            <p className="mt-2">
-              Rôle :{" "}
-              <span className="font-semibold text-undercover-accent">
-                {ROLE_LABELS[room.lastEliminated.role]}
-              </span>
+            <p className="uc-hint mt-2">
+              Le rôle sera révélé à la fin de la partie.
             </p>
           </>
         ) : (
@@ -430,16 +422,32 @@ function GameEndView({
         </h2>
       </div>
 
-      {room.lastEliminated && (
-        <div className="uc-card">
-          <p className="uc-hint">Dernier éliminé</p>
-          <p className="mt-1 font-semibold">
-            {room.players.find((player) => player.id === room.lastEliminated?.playerId)?.name}
-            {" — "}
-            {ROLE_LABELS[room.lastEliminated.role]}
-          </p>
-        </div>
-      )}
+      <div className="uc-card">
+        <h3 className="mb-3 font-semibold">Rôles révélés</h3>
+        <ul className="space-y-2">
+          {room.players.map((player) => {
+            const role = room.revealedRoles?.[player.id];
+            return (
+              <li
+                key={player.id}
+                className="flex items-center justify-between rounded-lg bg-undercover-surface px-3 py-2"
+              >
+                <span>
+                  {player.name}
+                  {!player.isAlive && (
+                    <span className="ml-2 text-xs text-undercover-muted">
+                      (éliminé)
+                    </span>
+                  )}
+                </span>
+                <span className="font-medium text-undercover-accent">
+                  {role ? ROLE_LABELS[role] : "—"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
 
       {isHost && (
         <button

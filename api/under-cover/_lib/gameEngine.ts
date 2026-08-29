@@ -304,17 +304,32 @@ export function toRoomView(room: RoomState, playerId?: string): RoomView {
   const {
     wordPair: _wordPair,
     roles: _roles,
+    lastEliminated,
     ...publicState
   } = room;
 
-  const view: RoomView = { ...publicState };
+  const view: RoomView = {
+    ...publicState,
+    lastEliminated: null,
+  };
 
-  if (playerId && room.roles[playerId] && room.wordPair) {
-    const role = room.roles[playerId];
+  if (lastEliminated) {
+    view.lastEliminated =
+      room.phase === "game-end"
+        ? lastEliminated
+        : { playerId: lastEliminated.playerId };
+  } else {
+    view.lastEliminated = null;
+  }
+
+  if (playerId && room.roles[playerId] && room.wordPair && room.phase !== "lobby") {
     view.me = {
-      role,
-      word: getPlayerWord(role, room.wordPair),
+      word: getPlayerWord(room.roles[playerId], room.wordPair),
     };
+  }
+
+  if (room.phase === "game-end") {
+    view.revealedRoles = { ...room.roles };
   }
 
   return view;
