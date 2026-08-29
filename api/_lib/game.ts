@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID } from "crypto";
 
 export function shuffle<T>(array: T[]): T[] {
   const copy = [...array];
