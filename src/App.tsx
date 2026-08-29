@@ -246,7 +246,7 @@ function LobbyScreen({
 
       <div className="card">
         <h2>Joueurs ({room.players.length})</h2>
-        <ul className="player-list">
+        <ul className="player-list stagger-in">
           {room.players.map((p) => (
             <li key={p.id} className="player-chip">
               <span>
@@ -437,7 +437,7 @@ function RankingScreen({
           Tape sur <strong>un joueur</strong> — celui qui correspond le mieux à la question.
         </p>
 
-        <div className="ranking-pick">
+        <div className="ranking-pick stagger-in">
           {room.players.map((p) => (
             <button
               key={p.id}
@@ -531,7 +531,7 @@ function GuessScreen({
           Devine selon toi le joueur le plus voté — +1 pt par bonne réponse.
         </p>
 
-        <div className="ranking-pick">
+        <div className="ranking-pick stagger-in">
           {room.players.map((p) => (
             <button
               key={p.id}
@@ -600,7 +600,7 @@ function RoundEndScreen({
 
       <div className="card">
         <h2>Scores</h2>
-        <ul className="player-list">
+        <ul className="player-list stagger-in">
           {[...room.players]
             .sort((a, b) => b.score - a.score)
             .map((p) => (
@@ -662,7 +662,7 @@ function GameEndScreen({
 
       <div className="card">
         <h3>Classement final</h3>
-        <ul className="result-list">
+        <ul className="result-list stagger-in">
           {sorted.map((p, i) => (
             <li
               key={p.id}
@@ -720,7 +720,12 @@ function GameScreen({
   };
 
   if (loading && !room) {
-    return <div className="loading">Connexion à la partie...</div>;
+    return (
+      <div className="loading">
+        <div className="spinner" />
+        <p>Connexion à la partie...</p>
+      </div>
+    );
   }
 
   if (!room) {
@@ -739,10 +744,10 @@ function GameScreen({
 
   return (
     <>
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error shake">{error}</p>}
 
       {room.phase !== "lobby" && room.phase !== "game-end" && (
-        <div className="round-info">
+        <div className="round-info fade-in">
           <span>
             Manche <span className="highlight">{room.currentRound}</span> /{" "}
             {room.totalRounds}
@@ -751,6 +756,7 @@ function GameScreen({
         </div>
       )}
 
+      <div key={room.phase} className="screen-enter">
       {room.phase === "lobby" && (
         <LobbyScreen
           room={room}
@@ -829,13 +835,14 @@ function GameScreen({
 
       {room.phase !== "lobby" && room.phase !== "game-end" && (
         <button
-          className="btn btn-ghost leave-btn"
+          className="btn btn-ghost leave-btn fade-in"
           type="button"
           onClick={handleLeave}
         >
           Quitter la partie
         </button>
       )}
+      </div>
     </>
   );
 }
@@ -870,19 +877,36 @@ export default function App() {
   };
 
   return (
-    <div className="app">
-      <h1>Tri-Pote</h1>
-      <p className="subtitle">Salons privés entre potes — multijoueur</p>
+    <div className="app-shell">
+      <div className="bg-orbs" aria-hidden="true">
+        <div className="orb orb-1" />
+        <div className="orb orb-2" />
+        <div className="orb orb-3" />
+      </div>
 
-      {session ? (
-        <GameScreen
-          session={session}
-          initialRoom={initialRoom}
-          onLeave={handleLeave}
-        />
-      ) : (
-        <HomeScreen onSession={handleSession} initialCode={joinCode} />
-      )}
+      <div className="app">
+        <header className="app-header fade-in">
+          <div className="logo-mark">🎲</div>
+          <div>
+            <h1>Tri-Pote</h1>
+            <p className="subtitle">Salons privés entre potes — multijoueur</p>
+          </div>
+        </header>
+
+        <main className="app-main">
+          {session ? (
+            <GameScreen
+              session={session}
+              initialRoom={initialRoom}
+              onLeave={handleLeave}
+            />
+          ) : (
+            <div className="screen-enter">
+              <HomeScreen onSession={handleSession} initialCode={joinCode} />
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
