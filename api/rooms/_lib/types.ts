@@ -24,13 +24,11 @@ export interface RoundState {
   rankings: PlayerVotes;
   guesses: PlayerVotes;
   rankingDeadline: number;
-  currentQuestionIndex: number;
   winners?: Record<string, string>;
   progress?: {
     rankingsDone: number;
     guessesDone: number;
     totalPlayers: number;
-    currentQuestionIndex: number;
     totalQuestions: number;
   };
 }

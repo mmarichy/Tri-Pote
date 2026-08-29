@@ -36,8 +36,6 @@ export interface RoundState {
   rankings: PlayerVotes;
   guesses: PlayerVotes;
   rankingDeadline: number;
-  /** Question affichée pour tout le monde (vote / devinette séquentiels) */
-  currentQuestionIndex: number;
   /** Gagnants par question — visible seulement en fin de manche */
   winners?: Record<string, string>;
   /** Progression agrégée (sans exposer les classements des autres) */
@@ -45,7 +43,6 @@ export interface RoundState {
     rankingsDone: number;
     guessesDone: number;
     totalPlayers: number;
-    currentQuestionIndex: number;
     totalQuestions: number;
   };
 }

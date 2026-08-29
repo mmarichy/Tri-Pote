@@ -8,6 +8,9 @@ import {
   sendAction,
 } from "./api/client";
 import {
+  countCompletedGuesses,
+  countCompletedRankings,
+  nextPendingIndex,
   normalizeRoomCode,
 } from "../shared/game";
 import { DEFAULT_QUESTIONS_PER_ROUND, MAX_QUESTIONS_PER_ROUND } from "./types";
@@ -302,8 +305,8 @@ function LobbyScreen({
             onChange={(e) => setQuestionsPerRound(Number(e.target.value))}
           />
           <p className="hint hint--compact">
-            Les questions s'affichent une par une — tout le monde doit répondre
-            avant de passer à la suivante.
+            Les questions s'affichent une par une. Tu passes à la suivante
+            directement après ta réponse, puis tu attends les autres à la fin.
           </p>
           {error && <p className="error">{error}</p>}
           <button
@@ -384,10 +387,7 @@ function WaitingForOthers({
     <div className="waiting-banner">
       <div className="emoji">{emoji}</div>
       <p>{message}</p>
-      <p className="hint">
-        En attente des autres ({done}/{total})…
-      </p>
-      <p className="hint">La question suivante arrive dès que tout le monde a répondu.</p>
+      <p className="hint">En attente que tout le monde ait terminé ({done}/{total})…</p>
     </div>
   );
 }
@@ -402,17 +402,20 @@ function RankingScreen({
   onVote: (questionIndex: number, votedPlayerId: string) => Promise<void>;
 }) {
   const questions = room.round?.questions ?? [];
-  const currentIndex = room.round?.currentQuestionIndex ?? 0;
   const playerVotes = room.round?.rankings[playerId];
   const progress = room.round?.progress;
-  const hasAnswered = Boolean(playerVotes?.[String(currentIndex)]);
+  const allDone =
+    countCompletedRankings(playerVotes, questions.length) === questions.length;
+
+  const currentIndex =
+    nextPendingIndex(playerVotes, questions.length) ?? questions.length - 1;
   const currentQuestion = questions[currentIndex];
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const handleVote = async (votedPlayerId: string) => {
-    if (hasAnswered || !currentQuestion) return;
+    if (allDone || !currentQuestion) return;
     setBusy(true);
     setError("");
     try {
@@ -424,29 +427,16 @@ function RankingScreen({
     }
   };
 
-  if (!currentQuestion) {
-    return (
-      <div className="waiting-banner">
-        <div className="emoji">⏳</div>
-        <p>Passage à la phase suivante…</p>
-      </div>
-    );
-  }
-
-  if (hasAnswered) {
+  if (allDone) {
     return (
       <>
-        <QuestionProgress current={currentIndex} total={questions.length} />
+        <QuestionProgress current={questions.length} total={questions.length} />
         <WaitingForOthers
           emoji="✅"
-          message="Vote enregistré !"
+          message="Tous tes votes sont envoyés !"
           done={progress?.rankingsDone ?? 0}
           total={progress?.totalPlayers ?? room.players.length}
         />
-        <div className="card card-highlight card-dim">
-          <span className="theme-badge theme-badge-lg">{currentQuestion.theme}</span>
-          <p className="question-hero">{currentQuestion.question}</p>
-        </div>
       </>
     );
   }
@@ -504,17 +494,20 @@ function GuessScreen({
   onGuess: (questionIndex: number, guessedPlayerId: string) => Promise<void>;
 }) {
   const questions = room.round?.questions ?? [];
-  const currentIndex = room.round?.currentQuestionIndex ?? 0;
   const playerGuesses = room.round?.guesses[playerId];
   const progress = room.round?.progress;
-  const hasAnswered = Boolean(playerGuesses?.[String(currentIndex)]);
+  const allDone =
+    countCompletedGuesses(playerGuesses, questions.length) === questions.length;
+
+  const currentIndex =
+    nextPendingIndex(playerGuesses, questions.length) ?? questions.length - 1;
   const currentQuestion = questions[currentIndex];
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const handleGuess = async (guessedPlayerId: string) => {
-    if (hasAnswered || !currentQuestion) return;
+    if (allDone || !currentQuestion) return;
     setBusy(true);
     setError("");
     try {
@@ -526,29 +519,16 @@ function GuessScreen({
     }
   };
 
-  if (!currentQuestion) {
-    return (
-      <div className="waiting-banner">
-        <div className="emoji">⏳</div>
-        <p>Calcul des résultats…</p>
-      </div>
-    );
-  }
-
-  if (hasAnswered) {
+  if (allDone) {
     return (
       <>
-        <QuestionProgress current={currentIndex} total={questions.length} />
+        <QuestionProgress current={questions.length} total={questions.length} />
         <WaitingForOthers
           emoji="🤔"
-          message="Réponse enregistrée !"
+          message="Toutes tes réponses sont envoyées !"
           done={progress?.guessesDone ?? 0}
           total={progress?.totalPlayers ?? room.players.length}
         />
-        <div className="card card-highlight card-dim">
-          <span className="theme-badge theme-badge-lg">{currentQuestion.theme}</span>
-          <p className="question-hero">{currentQuestion.question}</p>
-        </div>
       </>
     );
   }
