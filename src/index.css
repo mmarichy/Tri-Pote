@@ -186,7 +186,7 @@ h1 {
 
 .lobby-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: 1rem;
   align-items: start;
 }
@@ -880,34 +880,41 @@ input[type="number"]:focus {
   white-space: nowrap;
 }
 
-.theme-picker-all {
+.theme-picker-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
   margin-bottom: 0.75rem;
-  align-self: flex-start;
 }
 
 .theme-grid {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 0.4rem;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
   padding-right: 0.15rem;
+  align-content: start;
 }
 
 .theme-chip {
   font-family: inherit;
-  font-size: 0.78rem;
+  font-size: 0.68rem;
   font-weight: 600;
-  padding: 0.45rem 0.7rem;
+  padding: 0.4rem 0.35rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.04);
   color: #9ca3af;
   cursor: pointer;
   transition: all 0.2s var(--ease-out);
-  text-align: left;
-  width: 100%;
+  text-align: center;
+  line-height: 1.2;
+  min-height: 2.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .theme-chip:hover:not(:disabled) {

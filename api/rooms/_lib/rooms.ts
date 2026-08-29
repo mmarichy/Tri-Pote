@@ -408,7 +408,7 @@ function processRoom(
   if (next.questionsPerRound === undefined) {
     next.questionsPerRound = DEFAULT_QUESTIONS_PER_ROUND;
   }
-  if (!next.selectedThemes?.length) {
+  if (next.selectedThemes === undefined) {
     next.selectedThemes = loadAllThemes();
   }
   if (activePlayerId) {
@@ -613,9 +613,6 @@ export async function handleAction(
         throw new Error("Les thèmes ne peuvent être modifiés qu'au lobby");
       }
       const themes = normalizeThemes(payload.themes);
-      if (themes.length === 0) {
-        throw new Error("Sélectionne au moins un thème");
-      }
       room.selectedThemes = themes;
       await saveRoom(room);
       return room;

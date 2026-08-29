@@ -238,7 +238,6 @@ function ThemePicker({
   const toggle = (theme: string) => {
     if (!isHost || busy) return;
     if (selected.has(theme)) {
-      if (selected.size <= 1) return;
       void applyThemes(selectedThemes.filter((t) => t !== theme));
     } else {
       void applyThemes([...selectedThemes, theme]);
@@ -262,14 +261,24 @@ function ThemePicker({
           : "L'hôte choisit les thèmes — tu vois la sélection en direct."}
       </p>
       {isHost && (
-        <button
-          className="btn btn-secondary btn-sm theme-picker-all"
-          type="button"
-          disabled={busy || selectedThemes.length === ALL_THEMES.length}
-          onClick={() => applyThemes([...ALL_THEMES])}
-        >
-          Tout sélectionner
-        </button>
+        <div className="theme-picker-actions">
+          <button
+            className="btn btn-secondary btn-sm"
+            type="button"
+            disabled={busy || selectedThemes.length === ALL_THEMES.length}
+            onClick={() => applyThemes([...ALL_THEMES])}
+          >
+            Tout sélectionner
+          </button>
+          <button
+            className="btn btn-secondary btn-sm"
+            type="button"
+            disabled={busy || selectedThemes.length === 0}
+            onClick={() => applyThemes([])}
+          >
+            Tout désélectionner
+          </button>
+        </div>
       )}
       <div className="theme-grid">
         {ALL_THEMES.map((theme) => (
