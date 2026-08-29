@@ -448,7 +448,7 @@ function RoundIntroScreen({
   const questionCount = room.round?.questions.length ?? room.questionsPerRound;
 
   return (
-    <div className="phase-intro">
+    <>
       <div className="card card-highlight">
         <p className="phase-label">Manche {room.currentRound} / {room.totalRounds}</p>
         <h2 className="round-intro-title">Prêt pour les votes ?</h2>
@@ -488,17 +488,15 @@ function RoundIntroScreen({
         </ul>
       </div>
 
-      {room.currentRound === 1 && (
-        <div className="card">
-          <h2>Rappel</h2>
-          <ul className="rules-list">
-            <li>Phase 1 — Vote pour un joueur par question</li>
-            <li>Pause — L'hôte lance la phase 2 quand tout le monde a voté</li>
-            <li>Phase 2 — Devine qui a été le plus voté (+1 pt)</li>
-            <li>Les questions s'enchaînent une par une à ton rythme</li>
-          </ul>
-        </div>
-      )}
+      <div className="card">
+        <h2>Rappel</h2>
+        <ul className="rules-list">
+          <li>Phase 1 — Vote pour un joueur par question</li>
+          <li>Pause — L'hôte lance la phase 2 quand tout le monde a voté</li>
+          <li>Phase 2 — Devine qui a été le plus voté (+1 pt)</li>
+          <li>Les questions s'enchaînent une par une à ton rythme</li>
+        </ul>
+      </div>
 
       {error && <p className="error">{error}</p>}
 
@@ -526,7 +524,7 @@ function RoundIntroScreen({
           <p>En attente que l'hôte lance les votes…</p>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -545,42 +543,24 @@ function GuessIntroScreen({
   const progress = room.round?.progress;
 
   return (
-    <div className="phase-intro phase-intro--compact">
+    <>
       <div className="card card-highlight">
         <p className="phase-label">Phase 1 terminée</p>
         <h2 className="round-intro-title">Prêt pour la devinette ?</h2>
         <p className="hint">
-          {room.currentRound === 1 ? (
-            <>
-              Tout le monde a voté sur les{" "}
-              <strong>
-                {questionCount} question{questionCount !== 1 ? "s" : ""}
-              </strong>
-              . Place à la phase 2 : devine qui a été le plus voté (+1 pt par
-              bonne réponse).
-            </>
-          ) : (
-            <>
-              Devine qui a été le plus voté sur les{" "}
-              <strong>
-                {questionCount} question{questionCount !== 1 ? "s" : ""}
-              </strong>
-              .
-            </>
-          )}
+          Tout le monde a voté sur les <strong>{questionCount} question{questionCount !== 1 ? "s" : ""}</strong>.
+          Place à la phase 2 : devine qui a été le plus voté (+1 pt par bonne réponse).
         </p>
       </div>
 
-      {room.currentRound === 1 && (
-        <div className="card">
-          <h2>Rappel phase 2</h2>
-          <ul className="rules-list">
-            <li>Les mêmes questions reviennent une par une</li>
-            <li>Devine le joueur le plus voté par le groupe</li>
-            <li>Les résultats seront révélés à la fin de la manche</li>
-          </ul>
-        </div>
-      )}
+      <div className="card">
+        <h2>Rappel phase 2</h2>
+        <ul className="rules-list">
+          <li>Les mêmes questions reviennent une par une</li>
+          <li>Devine le joueur le plus voté par le groupe</li>
+          <li>Les résultats seront révélés à la fin de la manche</li>
+        </ul>
+      </div>
 
       {progress && (
         <p className="hint hint--compact">
@@ -614,7 +594,7 @@ function GuessIntroScreen({
           <p>En attente que l'hôte lance la devinette…</p>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -744,9 +724,9 @@ function RankingScreen({
         <p className="question-hero">{currentQuestion.question}</p>
       </div>
 
-      <div className="card card--compact phase-play">
+      <div className="card">
         <h2>Qui choisis-tu ?</h2>
-        <p className="hint hint--compact">
+        <p className="hint">
           Tape sur <strong>un joueur</strong> — celui qui correspond le mieux à la question.
         </p>
 
@@ -832,9 +812,9 @@ function GuessScreen({
         <p className="question-hero">{currentQuestion.question}</p>
       </div>
 
-      <div className="card card--compact phase-play">
+      <div className="card">
         <h2>Qui a été le plus voté ?</h2>
-        <p className="hint hint--compact">
+        <p className="hint">
           Devine selon toi le joueur le plus voté — +1 pt par bonne réponse.
         </p>
 
@@ -877,53 +857,49 @@ function RoundEndScreen({
   const myGuesses = room.round?.guesses[playerId] ?? {};
 
   return (
-    <div className="phase-round-end">
-      <div className="round-end-layout">
-        <div className="card card--compact">
-          <h2>Bilan de la manche</h2>
-          <div className="round-end-reveals">
-            {questions.map((q, i) => {
-              const topId = winners[String(i)];
-              const topName = room.players.find((p) => p.id === topId)?.name ?? "—";
-              const myGuess = myGuesses[String(i)];
-              const myGuessName =
-                room.players.find((p) => p.id === myGuess)?.name ?? "—";
-              const correct = myGuess === topId;
+    <>
+      <div className="card">
+        <h2>Bilan de la manche</h2>
+        {questions.map((q, i) => {
+          const topId = winners[String(i)];
+          const topName = room.players.find((p) => p.id === topId)?.name ?? "—";
+          const myGuess = myGuesses[String(i)];
+          const myGuessName =
+            room.players.find((p) => p.id === myGuess)?.name ?? "—";
+          const correct = myGuess === topId;
 
-              return (
-                <div key={q.id} className="reveal-question-block">
-                  <span className="theme-badge">{q.theme}</span>
-                  <p className="question-big-text">{q.question}</p>
-                  <p className="hint hint--compact">
-                    Gagnant : <strong>{topName}</strong>
-                    {myGuess ? (
-                      <>
-                        {" "}
-                        — Tu as dit : {myGuessName} {correct ? "✅ +1 pt" : "❌"}
-                      </>
-                    ) : null}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+          return (
+            <div key={q.id} className="reveal-question-block">
+              <span className="theme-badge">{q.theme}</span>
+              <p className="question-big-text">{q.question}</p>
+              <p className="hint">
+                Gagnant : <strong>{topName}</strong>
+                {myGuess ? (
+                  <>
+                    {" "}
+                    — Tu as dit : {myGuessName} {correct ? "✅ +1 pt" : "❌"}
+                  </>
+                ) : null}
+              </p>
+            </div>
+          );
+        })}
+      </div>
 
-        <div className="card card--compact">
-          <h2>Scores</h2>
-          <ul className="player-list stagger-in">
-            {[...room.players]
-              .sort((a, b) => b.score - a.score)
-              .map((p) => (
-                <li key={p.id} className="player-chip">
-                  <span>{p.name}</span>
-                  <span className="score">
-                    {p.score} pt{p.score !== 1 ? "s" : ""}
-                  </span>
-                </li>
-              ))}
-          </ul>
-        </div>
+      <div className="card">
+        <h2>Scores</h2>
+        <ul className="player-list stagger-in">
+          {[...room.players]
+            .sort((a, b) => b.score - a.score)
+            .map((p) => (
+              <li key={p.id} className="player-chip">
+                <span>{p.name}</span>
+                <span className="score">
+                  {p.score} pt{p.score !== 1 ? "s" : ""}
+                </span>
+              </li>
+            ))}
+        </ul>
       </div>
 
       {isHost ? (
@@ -947,7 +923,7 @@ function RoundEndScreen({
           <p>En attente de l'hôte...</p>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -1033,11 +1009,9 @@ function GameScreen({
 
   if (loading && !room) {
     return (
-      <div className="game-viewport game-viewport--center">
-        <div className="loading">
-          <div className="spinner" />
-          <p>Connexion à la partie...</p>
-        </div>
+      <div className="loading">
+        <div className="spinner" />
+        <p>Connexion à la partie...</p>
       </div>
     );
   }
@@ -1057,7 +1031,7 @@ function GameScreen({
   const isLastRound = room.currentRound >= room.totalRounds;
 
   return (
-    <div className="game-viewport">
+    <>
       {error && <p className="error shake">{error}</p>}
 
       {room.phase !== "lobby" && room.phase !== "game-end" && (
@@ -1070,7 +1044,7 @@ function GameScreen({
         </div>
       )}
 
-      <div key={room.phase} className="screen-enter screen-body">
+      <div key={room.phase} className="screen-enter">
       {room.phase === "lobby" && (
         <LobbyScreen
           room={room}
@@ -1181,7 +1155,6 @@ function GameScreen({
           onLeave={handleLeave}
         />
       )}
-      </div>
 
       {room.phase !== "lobby" && room.phase !== "game-end" && (
         <button
@@ -1192,7 +1165,8 @@ function GameScreen({
           Quitter la partie
         </button>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -1253,7 +1227,7 @@ export default function App() {
               onLeave={handleLeave}
             />
           ) : (
-            <div className="screen-enter screen-body home-screen">
+            <div className="screen-enter">
               <HomeScreen onSession={handleSession} initialCode={joinCode} />
             </div>
           )}

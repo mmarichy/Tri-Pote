@@ -444,17 +444,25 @@ function prepareRound(room: RoomState): RoomState {
     return { ...room, phase: "game-end", round: null };
   }
 
-  return {
-    ...room,
-    phase: "round-intro",
-    usedQuestions: used,
-    round: {
-      questions: roundQuestions,
-      rankings: {},
-      guesses: {},
-      rankingDeadline: 0,
-    },
+  const roundState = {
+    questions: roundQuestions,
+    rankings: {},
+    guesses: {},
+    rankingDeadline: 0,
   };
+
+  const nextRoom: RoomState = {
+    ...room,
+    usedQuestions: used,
+    round: roundState,
+  };
+
+  // Menu règles uniquement avant la 1re manche
+  if (room.currentRound <= 1) {
+    return { ...nextRoom, phase: "round-intro" };
+  }
+
+  return beginRankingPhase({ ...nextRoom, phase: "ranking" });
 }
 
 function beginRankingPhase(room: RoomState): RoomState {
