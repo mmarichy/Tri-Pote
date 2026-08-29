@@ -22,7 +22,10 @@ export default async function handler(req, res) {
         const meta = await getRoomMeta(code);
         return res.status(200).json(meta);
       }
-      const room = await getRoomState(code);
+      const room = await getRoomState(
+        code,
+        typeof req.query.playerId === "string" ? req.query.playerId : undefined
+      );
       return res.status(200).json({ room });
     }
 

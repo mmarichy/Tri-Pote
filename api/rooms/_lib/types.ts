@@ -29,9 +29,11 @@ export interface RoomState {
   currentRound: number;
   usedQuestions: string[];
   round: RoundState | null;
+  lastSeen: Record<string, number>;
 }
 
 export const RANKING_TIMEOUT_MS = 60_000;
+export const PLAYER_INACTIVE_MS = 90_000;
 
 export type RoomAction =
   | { action: "join"; name: string }

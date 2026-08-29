@@ -59,9 +59,15 @@ export async function fetchRoomMeta(code: string): Promise<{ exists: boolean }> 
   return res.json();
 }
 
-export async function fetchRoom(code: string): Promise<RoomState> {
+export async function fetchRoom(
+  code: string,
+  playerId?: string
+): Promise<RoomState> {
   const normalized = normalizeRoomCode(code);
-  const res = await fetch(`/api/rooms/${normalized}`);
+  const query = playerId
+    ? `?playerId=${encodeURIComponent(playerId)}`
+    : "";
+  const res = await fetch(`/api/rooms/${normalized}${query}`);
   if (!res.ok) throw new Error(await parseError(res));
   const data = (await res.json()) as { room: RoomState };
   return data.room;

@@ -11,7 +11,7 @@ import {
   shuffle,
 } from "./game.js";
 import type { Player, RoomAction, RoomState } from "./types.js";
-import { RANKING_TIMEOUT_MS } from "./types.js";
+import { PLAYER_INACTIVE_MS, RANKING_TIMEOUT_MS } from "./types.js";
 import { deleteRoom, getRoom, roomExists, saveRoom } from "./store.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
@@ -63,6 +63,11 @@ function removePlayerFromRoom(
   }
 
   let next: RoomState = { ...room, players, hostId };
+
+  if (next.lastSeen) {
+    const { [playerId]: _removed, ...rest } = next.lastSeen;
+    next.lastSeen = rest;
+  }
 
   if (next.round) {
     const rankings: Record<string, string[]> = {};
@@ -129,6 +134,54 @@ function applyRankingTimeout(room: RoomState): RoomState {
   return room;
 }
 
+function ensureLastSeen(room: RoomState): RoomState {
+  if (room.lastSeen) return room;
+  const now = Date.now();
+  return {
+    ...room,
+    lastSeen: Object.fromEntries(room.players.map((p) => [p.id, now])),
+  };
+}
+
+function touchPresence(room: RoomState, playerId: string): RoomState {
+  const next = ensureLastSeen(room);
+  if (!findPlayer(next, playerId)) return next;
+  return {
+    ...next,
+    lastSeen: { ...next.lastSeen, [playerId]: Date.now() },
+  };
+}
+
+function applyInactivePlayers(room: RoomState): RoomState | null {
+  const base = ensureLastSeen(room);
+  const now = Date.now();
+  const inactive = base.players.filter((p) => {
+    const seen = base.lastSeen[p.id] ?? 0;
+    return now - seen > PLAYER_INACTIVE_MS;
+  });
+  if (inactive.length === 0) return base;
+
+  let next: RoomState | null = base;
+  for (const player of inactive) {
+    if (!next) break;
+    next = removePlayerFromRoom(next, player.id);
+  }
+  return next;
+}
+
+function processRoom(
+  room: RoomState,
+  activePlayerId?: string
+): RoomState | null {
+  let next = ensureLastSeen(room);
+  if (activePlayerId) {
+    next = touchPresence(next, activePlayerId);
+  }
+  next = applyInactivePlayers(next);
+  if (!next) return null;
+  return applyRankingTimeout(next);
+}
+
 async function persistRoom(room: RoomState | null, code: string): Promise<void> {
   if (!room) {
     await deleteRoom(code);
@@ -176,6 +229,7 @@ export async function createRoom(hostName: string): Promise<RoomState> {
   }
 
   const hostId = createId();
+  const now = Date.now();
   const room: RoomState = {
     code,
     hostId,
@@ -185,6 +239,7 @@ export async function createRoom(hostName: string): Promise<RoomState> {
     currentRound: 0,
     usedQuestions: [],
     round: null,
+    lastSeen: { [hostId]: now },
   };
 
   await saveRoom(room);
@@ -203,11 +258,10 @@ export async function handleAction(
   let room = await getRoom(normalized);
   if (!room) throw new Error("Salon introuvable");
 
-  const afterTimeout = applyRankingTimeout(room);
-  if (afterTimeout !== room) {
-    await saveRoom(afterTimeout);
-    room = afterTimeout;
-  }
+  const activePlayerId =
+    "playerId" in payload ? payload.playerId : undefined;
+  room = processRoom(room, activePlayerId);
+  if (!room) throw new Error("Salon introuvable");
 
   switch (payload.action) {
     case "join": {
@@ -223,7 +277,9 @@ export async function handleAction(
       ) {
         throw new Error("Ce pseudo est déjà pris");
       }
-      room.players.push({ id: createId(), name, score: 0 });
+      const newId = createId();
+      room.players.push({ id: newId, name, score: 0 });
+      room = touchPresence(room, newId);
       await saveRoom(room);
       return room;
     }
@@ -393,7 +449,10 @@ export async function handleAction(
   }
 }
 
-export async function getRoomState(code: string): Promise<RoomState> {
+export async function getRoomState(
+  code: string,
+  playerId?: string
+): Promise<RoomState> {
   const normalized = normalizeRoomCode(code);
   if (!isValidRoomCode(normalized)) {
     throw new Error("Code de salon invalide");
@@ -401,12 +460,13 @@ export async function getRoomState(code: string): Promise<RoomState> {
   const room = await getRoom(normalized);
   if (!room) throw new Error("Salon introuvable");
 
-  const timed = applyRankingTimeout(room);
-  if (timed !== room) {
-    await saveRoom(timed);
-    return timed;
+  const processed = processRoom(room, playerId);
+  if (!processed) throw new Error("Salon introuvable");
+
+  if (processed !== room) {
+    await saveRoom(processed);
   }
-  return room;
+  return processed;
 }
 
 export async function getRoomMeta(code: string): Promise<{ exists: boolean }> {
@@ -415,5 +475,15 @@ export async function getRoomMeta(code: string): Promise<{ exists: boolean }> {
     return { exists: false };
   }
   const room = await getRoom(normalized);
-  return { exists: room !== null };
+  if (!room) return { exists: false };
+
+  const processed = processRoom(room);
+  if (!processed) {
+    await deleteRoom(normalized);
+    return { exists: false };
+  }
+  if (processed !== room) {
+    await saveRoom(processed);
+  }
+  return { exists: true };
 }

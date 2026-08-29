@@ -43,7 +43,7 @@ export function useRoom(
 
     const poll = async () => {
       try {
-        const data = await fetchRoom(session.roomCode);
+        const data = await fetchRoom(session.roomCode, session.playerId);
         if (!active) return;
 
         const stillInRoom = data.players.some((p) => p.id === session.playerId);
@@ -75,18 +75,18 @@ export function useRoom(
       active = false;
       clearInterval(id);
     };
-  }, [session?.roomCode, initialRoom]);
+  }, [session?.roomCode, session?.playerId, initialRoom]);
 
   useEffect(() => {
     if (!session) return;
 
-    const onPageHide = () => {
+    const onUnload = () => {
       if (leavingRef.current) return;
       leaveRoomBeacon(session.roomCode, session.playerId);
     };
 
-    window.addEventListener("pagehide", onPageHide);
-    return () => window.removeEventListener("pagehide", onPageHide);
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
   }, [session?.roomCode, session?.playerId]);
 
   const dispatch = useCallback(
