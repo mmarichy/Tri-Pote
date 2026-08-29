@@ -1,6 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -14,20 +12,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { hostName } = req.body as { hostName?: string };
+    const { hostName } = req.body || {};
     if (!hostName?.trim()) {
       return res.status(400).json({ error: "Nom requis" });
     }
 
-    const { createRoom } = await import("./_lib/rooms");
+    const { createRoom } = await import("./_lib/rooms.js");
     const room = await createRoom(hostName);
     return res.status(201).json({
       room,
       playerId: room.hostId,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Erreur serveur";
     console.error("createRoom error:", err);
-    return res.status(500).json({ error: message });
+    return res.status(500).json({
+      error: err instanceof Error ? err.message : "Erreur serveur",
+    });
   }
-}
+};
