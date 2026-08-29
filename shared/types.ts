@@ -23,11 +23,16 @@ export interface RankingEntry {
   rank: number;
 }
 
+/** Classements par joueur → index question → ordre des joueurs */
+export type PlayerRankings = Record<string, Record<string, string[]>>;
+
+/** Devinettes par joueur → index question → id du joueur choisi */
+export type PlayerGuesses = Record<string, Record<string, string>>;
+
 export interface RoundState {
-  question: string;
-  choices: string[];
-  rankings: Record<string, string[]>;
-  guesses: Record<string, string>;
+  questions: string[];
+  rankings: PlayerRankings;
+  guesses: PlayerGuesses;
   rankingDeadline: number;
 }
 
@@ -43,6 +48,7 @@ export interface RoomState {
   lastSeen: Record<string, number>;
 }
 
+export const QUESTIONS_PER_ROUND = 4;
 export const RANKING_TIMEOUT_MS = 60_000;
 export const PLAYER_INACTIVE_MS = 90_000;
 
@@ -51,9 +57,19 @@ export type RoomAction =
   | { action: "leave"; playerId: string }
   | { action: "kick"; playerId: string; targetId: string }
   | { action: "start"; playerId: string; totalRounds: number }
-  | { action: "rank"; playerId: string; order: string[] }
+  | {
+      action: "rank";
+      playerId: string;
+      questionIndex: number;
+      order: string[];
+    }
   | { action: "continue"; playerId: string }
-  | { action: "guess"; playerId: string; question: string }
+  | {
+      action: "guess";
+      playerId: string;
+      questionIndex: number;
+      guessedPlayerId: string;
+    }
   | { action: "next-round"; playerId: string }
   | { action: "restart"; playerId: string };
 

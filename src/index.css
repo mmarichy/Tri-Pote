@@ -563,3 +563,121 @@ input[type="number"] {
   box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.25);
 }
 
+/* ── Questions en gros ── */
+
+.question-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.question-big {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  opacity: 0.55;
+  transition: opacity 0.2s, border-color 0.2s;
+}
+
+.question-big p {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.35;
+  color: #e5e7eb;
+}
+
+.question-big.active {
+  opacity: 1;
+  border-color: rgba(167, 139, 250, 0.55);
+  background: rgba(167, 139, 250, 0.12);
+}
+
+.question-big.active p {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.question-big.done {
+  opacity: 0.75;
+}
+
+.question-big.done .question-num {
+  background: rgba(34, 197, 94, 0.25);
+  color: #86efac;
+}
+
+.question-num {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(167, 139, 250, 0.2);
+  color: #c4b5fd;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.question-big-text {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 0.5rem;
+  line-height: 1.35;
+}
+
+.reveal-question-block {
+  padding: 1rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.reveal-question-block:last-child {
+  border-bottom: none;
+}
+
+.reveal-winner {
+  margin: 0.35rem 0 0.65rem;
+  font-size: 1.05rem;
+  color: #c4b5fd;
+}
+
+.result-list-compact .result-item {
+  padding: 0.45rem 0.65rem;
+}
+
+.guess-player-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.guess-player-btn:hover:not(:disabled) {
+  background: rgba(167, 139, 250, 0.15);
+  border-color: rgba(167, 139, 250, 0.4);
+}
+
+.guess-player-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+

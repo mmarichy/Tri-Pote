@@ -2,16 +2,20 @@ import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import {
-  buildChoices,
   createId,
   generateRoomCode,
+  getTopPlayerForQuestion,
   isValidRoomCode,
   normalizeRoomCode,
   pickQuestion,
   shuffle,
 } from "./game.js";
 import type { Player, RoomAction, RoomState } from "./types.js";
-import { PLAYER_INACTIVE_MS, RANKING_TIMEOUT_MS } from "./types.js";
+import {
+  PLAYER_INACTIVE_MS,
+  QUESTIONS_PER_ROUND,
+  RANKING_TIMEOUT_MS,
+} from "./types.js";
 import { deleteRoom, getRoom, roomExists, saveRoom } from "./store.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
@@ -39,13 +43,75 @@ function findPlayer(room: RoomState, playerId: string): Player | undefined {
   return room.players.find((p) => p.id === playerId);
 }
 
-function allPlayersSubmitted(
-  room: RoomState,
-  field: "rankings" | "guesses"
-): boolean {
+function allRankingsComplete(room: RoomState): boolean {
   if (!room.round) return false;
-  const submitted = Object.keys(room.round[field]);
-  return submitted.length >= room.players.length;
+  const qCount = room.round.questions.length;
+  return room.players.every((p) => {
+    const byPlayer = room.round!.rankings[p.id];
+    if (!byPlayer) return false;
+    for (let i = 0; i < qCount; i++) {
+      const order = byPlayer[String(i)];
+      if (!order || order.length !== room.players.length) return false;
+    }
+    return true;
+  });
+}
+
+function allGuessesComplete(room: RoomState): boolean {
+  if (!room.round) return false;
+  const qCount = room.round.questions.length;
+  return room.players.every((p) => {
+    const byPlayer = room.round!.guesses[p.id];
+    if (!byPlayer) return false;
+    for (let i = 0; i < qCount; i++) {
+      if (!byPlayer[String(i)]) return false;
+    }
+    return true;
+  });
+}
+
+function scoreRound(room: RoomState): void {
+  if (!room.round) return;
+  const tops = room.round.questions.map((_, i) =>
+    getTopPlayerForQuestion(room.players, room.round!.rankings, i)
+  );
+
+  room.players = room.players.map((p) => {
+    const byPlayer = room.round!.guesses[p.id] ?? {};
+    let gained = 0;
+    for (let i = 0; i < room.round!.questions.length; i++) {
+      if (byPlayer[String(i)] === tops[i]) gained += 1;
+    }
+    return { ...p, score: p.score + gained };
+  });
+}
+
+function cleanNestedRankings(
+  rankings: Record<string, Record<string, string[]>>,
+  removedId: string
+): Record<string, Record<string, string[]>> {
+  const result: Record<string, Record<string, string[]>> = {};
+  for (const [pid, byQ] of Object.entries(rankings)) {
+    if (pid === removedId) continue;
+    const cleaned: Record<string, string[]> = {};
+    for (const [qIdx, order] of Object.entries(byQ)) {
+      cleaned[qIdx] = order.filter((id) => id !== removedId);
+    }
+    result[pid] = cleaned;
+  }
+  return result;
+}
+
+function cleanNestedGuesses(
+  guesses: Record<string, Record<string, string>>,
+  removedId: string
+): Record<string, Record<string, string>> {
+  const result: Record<string, Record<string, string>> = {};
+  for (const [pid, byQ] of Object.entries(guesses)) {
+    if (pid === removedId) continue;
+    result[pid] = { ...byQ };
+  }
+  return result;
 }
 
 function removePlayerFromRoom(
@@ -70,20 +136,13 @@ function removePlayerFromRoom(
   }
 
   if (next.round) {
-    const rankings: Record<string, string[]> = {};
-    for (const [pid, order] of Object.entries(next.round.rankings)) {
-      if (pid === playerId) continue;
-      rankings[pid] = order.filter((id) => id !== playerId);
-    }
-
-    const guesses: Record<string, string> = {};
-    for (const [pid, guess] of Object.entries(next.round.guesses)) {
-      if (pid !== playerId) guesses[pid] = guess;
-    }
-
     next = {
       ...next,
-      round: { ...next.round, rankings, guesses },
+      round: {
+        ...next.round,
+        rankings: cleanNestedRankings(next.round.rankings, playerId),
+        guesses: cleanNestedGuesses(next.round.guesses, playerId),
+      },
     };
   }
 
@@ -101,18 +160,12 @@ function removePlayerFromRoom(
       players: players.map((p) => ({ ...p, score: 0 })),
     };
   } else if (next.phase === "ranking" && next.round) {
-    if (allPlayersSubmitted(next, "rankings")) {
+    if (allRankingsComplete(next)) {
       next.phase = "reveal";
     }
   } else if (next.phase === "guess" && next.round) {
-    if (allPlayersSubmitted(next, "guesses")) {
-      const correct = next.round.question;
-      next.players = next.players.map((p) => {
-        if (next.round!.guesses[p.id] === correct) {
-          return { ...p, score: p.score + 1 };
-        }
-        return p;
-      });
+    if (allGuessesComplete(next)) {
+      scoreRound(next);
       next.phase = "round-end";
     }
   }
@@ -127,7 +180,13 @@ function applyRankingTimeout(room: RoomState): RoomState {
   const playerIds = room.players.map((p) => p.id);
   for (const player of room.players) {
     if (!room.round.rankings[player.id]) {
-      room.round.rankings[player.id] = shuffle([...playerIds]);
+      room.round.rankings[player.id] = {};
+    }
+    for (let i = 0; i < room.round.questions.length; i++) {
+      const key = String(i);
+      if (!room.round.rankings[player.id][key]) {
+        room.round.rankings[player.id][key] = shuffle([...playerIds]);
+      }
     }
   }
   room.phase = "reveal";
@@ -191,24 +250,31 @@ async function persistRoom(room: RoomState | null, code: string): Promise<void> 
 }
 
 function startRound(room: RoomState): RoomState {
-  const questions = loadQuestions();
-  const question = pickQuestion(questions, room.usedQuestions);
-  if (!question) {
-    return { ...room, phase: "game-end", round: null };
+  const pool = loadQuestions();
+  const roundQuestions: string[] = [];
+  const used = [...room.usedQuestions];
+
+  for (let i = 0; i < QUESTIONS_PER_ROUND; i++) {
+    const question = pickQuestion(pool, used);
+    if (!question) break;
+    roundQuestions.push(question);
+    used.push(question);
   }
 
-  const { choices } = buildChoices(question, questions);
+  if (roundQuestions.length === 0) {
+    return { ...room, phase: "game-end", round: null };
+  }
 
   return {
     ...room,
     phase: "ranking",
-    usedQuestions: [...room.usedQuestions, question],
+    usedQuestions: used,
     round: {
-      question,
-      choices,
+      questions: roundQuestions,
       rankings: {},
       guesses: {},
-      rankingDeadline: Date.now() + RANKING_TIMEOUT_MS,
+      rankingDeadline:
+        Date.now() + RANKING_TIMEOUT_MS * roundQuestions.length,
     },
   };
 }
@@ -343,8 +409,18 @@ export async function handleAction(
       if (!findPlayer(room, payload.playerId)) {
         throw new Error("Joueur inconnu");
       }
-      if (room.round.rankings[payload.playerId]) {
-        throw new Error("Classement déjà envoyé");
+
+      const qIndex = payload.questionIndex;
+      if (qIndex < 0 || qIndex >= room.round.questions.length) {
+        throw new Error("Question invalide");
+      }
+
+      if (!room.round.rankings[payload.playerId]) {
+        room.round.rankings[payload.playerId] = {};
+      }
+      const qKey = String(qIndex);
+      if (room.round.rankings[payload.playerId][qKey]) {
+        throw new Error("Classement déjà envoyé pour cette question");
       }
 
       const order = payload.order;
@@ -358,9 +434,9 @@ export async function handleAction(
         throw new Error("Classement invalide");
       }
 
-      room.round.rankings[payload.playerId] = order;
+      room.round.rankings[payload.playerId][qKey] = order;
 
-      if (allPlayersSubmitted(room, "rankings")) {
+      if (allRankingsComplete(room)) {
         room.phase = "reveal";
       }
 
@@ -387,23 +463,27 @@ export async function handleAction(
       if (!findPlayer(room, payload.playerId)) {
         throw new Error("Joueur inconnu");
       }
-      if (room.round.guesses[payload.playerId]) {
+
+      const qIndex = payload.questionIndex;
+      if (qIndex < 0 || qIndex >= room.round.questions.length) {
+        throw new Error("Question invalide");
+      }
+      if (!findPlayer(room, payload.guessedPlayerId)) {
+        throw new Error("Joueur invalide");
+      }
+
+      if (!room.round.guesses[payload.playerId]) {
+        room.round.guesses[payload.playerId] = {};
+      }
+      const qKey = String(qIndex);
+      if (room.round.guesses[payload.playerId][qKey]) {
         throw new Error("Réponse déjà envoyée");
       }
-      if (!room.round.choices.includes(payload.question)) {
-        throw new Error("Choix invalide");
-      }
 
-      room.round.guesses[payload.playerId] = payload.question;
+      room.round.guesses[payload.playerId][qKey] = payload.guessedPlayerId;
 
-      if (allPlayersSubmitted(room, "guesses")) {
-        const correct = room.round.question;
-        room.players = room.players.map((p) => {
-          if (room.round!.guesses[p.id] === correct) {
-            return { ...p, score: p.score + 1 };
-          }
-          return p;
-        });
+      if (allGuessesComplete(room)) {
+        scoreRound(room);
         room.phase = "round-end";
       }
 

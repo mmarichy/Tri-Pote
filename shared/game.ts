@@ -63,6 +63,64 @@ export function aggregateRankings(
   return sorted;
 }
 
+export function rankingsForQuestion(
+  allRankings: Record<string, Record<string, string[]>>,
+  questionIndex: number
+): Record<string, string[]> {
+  const key = String(questionIndex);
+  const result: Record<string, string[]> = {};
+  for (const [playerId, byQuestion] of Object.entries(allRankings)) {
+    const order = byQuestion[key];
+    if (order) result[playerId] = order;
+  }
+  return result;
+}
+
+export function getTopPlayerForQuestion(
+  players: Player[],
+  allRankings: Record<string, Record<string, string[]>>,
+  questionIndex: number
+): string | null {
+  const perQuestion = rankingsForQuestion(allRankings, questionIndex);
+  if (Object.keys(perQuestion).length === 0) return null;
+  const results = aggregateRankings(players, perQuestion);
+  return results[0]?.playerId ?? null;
+}
+
+export function countCompletedRankings(
+  playerRankings: Record<string, string[]> | undefined,
+  questionCount: number
+): number {
+  if (!playerRankings) return 0;
+  let count = 0;
+  for (let i = 0; i < questionCount; i++) {
+    if (playerRankings[String(i)]) count++;
+  }
+  return count;
+}
+
+export function countCompletedGuesses(
+  playerGuesses: Record<string, string> | undefined,
+  questionCount: number
+): number {
+  if (!playerGuesses) return 0;
+  let count = 0;
+  for (let i = 0; i < questionCount; i++) {
+    if (playerGuesses[String(i)]) count++;
+  }
+  return count;
+}
+
+export function nextPendingIndex(
+  entries: Record<string, unknown> | undefined,
+  count: number
+): number | null {
+  for (let i = 0; i < count; i++) {
+    if (!entries?.[String(i)]) return i;
+  }
+  return null;
+}
+
 export function generateRoomCode(length = 4): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";

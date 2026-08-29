@@ -7,9 +7,16 @@ import {
   saveSession,
   sendAction,
 } from "./api/client";
-import { normalizeRoomCode } from "../shared/game";
+import {
+  aggregateRankings,
+  countCompletedGuesses,
+  countCompletedRankings,
+  getTopPlayerForQuestion,
+  nextPendingIndex,
+  normalizeRoomCode,
+  rankingsForQuestion,
+} from "../shared/game";
 import { useRoom } from "./hooks/useRoom";
-import { aggregateRankings } from "./types";
 import type { Player, RoomState, Session } from "./types";
 import { clearRoomUrl, getRoomCodeFromUrl, redirectQueryRoomToPath, roomUrl, setRoomUrl } from "./url";
 
@@ -332,6 +339,30 @@ function CountdownTimer({ deadline }: { deadline: number }) {
   );
 }
 
+function QuestionList({
+  questions,
+  activeIndex,
+  completedIndices,
+}: {
+  questions: string[];
+  activeIndex?: number;
+  completedIndices?: Set<number>;
+}) {
+  return (
+    <div className="question-list">
+      {questions.map((q, i) => (
+        <div
+          key={i}
+          className={`question-big ${activeIndex === i ? "active" : ""} ${completedIndices?.has(i) ? "done" : ""}`}
+        >
+          <span className="question-num">{i + 1}</span>
+          <p>{q}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function RankingScreen({
   room,
   playerId,
@@ -339,12 +370,26 @@ function RankingScreen({
 }: {
   room: RoomState;
   playerId: string;
-  onSubmit: (order: string[]) => Promise<void>;
+  onSubmit: (questionIndex: number, order: string[]) => Promise<void>;
 }) {
+  const questions = room.round?.questions ?? [];
+  const playerRankings = room.round?.rankings[playerId];
+  const completed = new Set<number>();
+  for (let i = 0; i < questions.length; i++) {
+    if (playerRankings?.[String(i)]) completed.add(i);
+  }
+
+  const currentIndex =
+    nextPendingIndex(playerRankings, questions.length) ?? questions.length - 1;
+  const allDone = countCompletedRankings(playerRankings, questions.length) === questions.length;
+
   const [order, setOrder] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const alreadyDone = Boolean(room.round?.rankings[playerId]);
+
+  useEffect(() => {
+    setOrder([]);
+  }, [currentIndex, allDone]);
 
   const rankMap = new Map(order.map((id, i) => [id, i + 1]));
 
@@ -354,11 +399,12 @@ function RankingScreen({
   };
 
   const handleSubmit = async () => {
-    if (order.length !== room.players.length) return;
+    if (allDone || order.length !== room.players.length) return;
     setBusy(true);
     setError("");
     try {
-      await onSubmit(order);
+      await onSubmit(currentIndex, order);
+      setOrder([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
     } finally {
@@ -366,14 +412,18 @@ function RankingScreen({
     }
   };
 
-  if (alreadyDone) {
-    const done = Object.keys(room.round?.rankings ?? {}).length;
+  if (allDone) {
+    const donePlayers = room.players.filter((p) =>
+      countCompletedRankings(room.round?.rankings[p.id], questions.length) ===
+      questions.length
+    ).length;
     return (
       <div className="waiting-banner">
         <div className="emoji">✅</div>
-        <p>Classement envoyé !</p>
+        <p>Tous tes classements sont envoyés !</p>
+        <QuestionList questions={questions} completedIndices={completed} />
         <p className="hint">
-          En attente des autres joueurs ({done}/{room.players.length})...
+          En attente des autres ({donePlayers}/{room.players.length})...
         </p>
       </div>
     );
@@ -384,11 +434,20 @@ function RankingScreen({
       {room.round?.rankingDeadline && (
         <CountdownTimer deadline={room.round.rankingDeadline} />
       )}
+
+      <QuestionList
+        questions={questions}
+        activeIndex={currentIndex}
+        completedIndices={completed}
+      />
+
       <div className="card">
-        <h2>Classe les joueurs</h2>
+        <h2>
+          Classe les joueurs — question {currentIndex + 1}/{questions.length}
+        </h2>
         <p className="hint">
-          Tape du <strong>meilleur</strong> au <strong>moins bon</strong> pour
-          une question secrète. ({order.length}/{room.players.length})
+          Tape du <strong>plus voté</strong> au <strong>moins voté</strong>. (
+          {order.length}/{room.players.length})
         </p>
 
         <div className="ranking-pick">
@@ -432,7 +491,7 @@ function RankingScreen({
         disabled={busy || order.length !== room.players.length}
         onClick={handleSubmit}
       >
-        Valider mon classement
+        Valider — question {currentIndex + 1}
       </button>
     </>
   );
@@ -447,7 +506,8 @@ function RevealScreen({
   isHost: boolean;
   onContinue: () => Promise<void>;
 }) {
-  const results = aggregateRankings(room.players, room.round?.rankings ?? {});
+  const questions = room.round?.questions ?? [];
+  const rankings = room.round?.rankings ?? {};
   const [busy, setBusy] = useState(false);
 
   const handleContinue = async () => {
@@ -462,20 +522,36 @@ function RevealScreen({
   return (
     <>
       <div className="card">
-        <h2>Classement de la manche</h2>
-        <p className="hint">Résultat des triages — devinez la question !</p>
-        <ul className="result-list">
-          {results.map((r) => (
-            <li
-              key={r.playerId}
-              className={`result-item ${r.rank === 1 ? "gold" : r.rank === 2 ? "silver" : r.rank === 3 ? "bronze" : ""}`}
-            >
-              <span className="result-rank">{r.rank}</span>
-              <span className="result-name">{r.name}</span>
-              <span className="result-points">{r.points} pts</span>
-            </li>
-          ))}
-        </ul>
+        <h2>Résultats des votes</h2>
+        <p className="hint">Voici le joueur le plus voté pour chaque question.</p>
+
+        {questions.map((q, i) => {
+          const topId = getTopPlayerForQuestion(room.players, rankings, i);
+          const topName =
+            room.players.find((p) => p.id === topId)?.name ?? "—";
+          const results = aggregateRankings(
+            room.players,
+            rankingsForQuestion(rankings, i)
+          );
+
+          return (
+            <div key={i} className="reveal-question-block">
+              <p className="question-big-text">{q}</p>
+              <p className="reveal-winner">
+                🏆 <strong>{topName}</strong>
+              </p>
+              <ul className="result-list result-list-compact">
+                {results.slice(0, 3).map((r) => (
+                  <li key={r.playerId} className="result-item">
+                    <span className="result-rank">{r.rank}</span>
+                    <span className="result-name">{r.name}</span>
+                    <span className="result-points">{r.points} pts</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
       </div>
 
       {isHost ? (
@@ -485,7 +561,7 @@ function RevealScreen({
           disabled={busy}
           onClick={handleContinue}
         >
-          Phase de devinette →
+          Devine les gagnants →
         </button>
       ) : (
         <div className="waiting-banner">
@@ -503,17 +579,29 @@ function GuessScreen({
 }: {
   room: RoomState;
   playerId: string;
-  onGuess: (question: string) => Promise<void>;
+  onGuess: (questionIndex: number, guessedPlayerId: string) => Promise<void>;
 }) {
+  const questions = room.round?.questions ?? [];
+  const playerGuesses = room.round?.guesses[playerId];
+  const completed = new Set<number>();
+  for (let i = 0; i < questions.length; i++) {
+    if (playerGuesses?.[String(i)]) completed.add(i);
+  }
+
+  const currentIndex =
+    nextPendingIndex(playerGuesses, questions.length) ?? questions.length - 1;
+  const allDone =
+    countCompletedGuesses(playerGuesses, questions.length) === questions.length;
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const alreadyDone = Boolean(room.round?.guesses[playerId]);
 
-  const handleGuess = async (question: string) => {
+  const handleGuess = async (guessedPlayerId: string) => {
+    if (allDone) return;
     setBusy(true);
     setError("");
     try {
-      await onGuess(question);
+      await onGuess(currentIndex, guessedPlayerId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
     } finally {
@@ -521,14 +609,19 @@ function GuessScreen({
     }
   };
 
-  if (alreadyDone) {
-    const done = Object.keys(room.round?.guesses ?? {}).length;
+  if (allDone) {
+    const donePlayers = room.players.filter(
+      (p) =>
+        countCompletedGuesses(room.round?.guesses[p.id], questions.length) ===
+        questions.length
+    ).length;
     return (
       <div className="waiting-banner">
         <div className="emoji">🤔</div>
-        <p>Réponse envoyée !</p>
+        <p>Toutes tes réponses sont envoyées !</p>
+        <QuestionList questions={questions} completedIndices={completed} />
         <p className="hint">
-          En attente des autres ({done}/{room.players.length})...
+          En attente des autres ({donePlayers}/{room.players.length})...
         </p>
       </div>
     );
@@ -536,20 +629,33 @@ function GuessScreen({
 
   return (
     <>
+      <QuestionList
+        questions={questions}
+        activeIndex={currentIndex}
+        completedIndices={completed}
+      />
+
       <div className="card">
-        <h2>Quelle était la question ?</h2>
-        <p className="hint">Choisis la bonne question (+1 point si correct).</p>
-        {(room.round?.choices ?? []).map((q, i) => (
-          <button
-            key={i}
-            type="button"
-            className="guess-btn"
-            disabled={busy}
-            onClick={() => handleGuess(q)}
-          >
-            {q}
-          </button>
-        ))}
+        <h2>
+          Qui a été le plus voté ? — question {currentIndex + 1}/
+          {questions.length}
+        </h2>
+        <p className="hint">+1 point par bonne réponse.</p>
+
+        <div className="ranking-pick">
+          {room.players.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className="guess-player-btn"
+              disabled={busy}
+              onClick={() => handleGuess(p.id)}
+            >
+              {p.name}
+              {p.id === playerId && " (toi)"}
+            </button>
+          ))}
+        </div>
       </div>
       {error && <p className="error">{error}</p>}
     </>
@@ -558,22 +664,49 @@ function GuessScreen({
 
 function RoundEndScreen({
   room,
+  playerId,
   isHost,
   isLastRound,
   onNext,
 }: {
   room: RoomState;
+  playerId: string;
   isHost: boolean;
   isLastRound: boolean;
   onNext: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
+  const questions = room.round?.questions ?? [];
+  const rankings = room.round?.rankings ?? {};
+  const myGuesses = room.round?.guesses[playerId] ?? {};
 
   return (
     <>
-      <div className="reveal-answer">
-        <p>La vraie question était :</p>
-        <strong>{room.round?.question}</strong>
+      <div className="card">
+        <h2>Bilan de la manche</h2>
+        {questions.map((q, i) => {
+          const topId = getTopPlayerForQuestion(room.players, rankings, i);
+          const topName = room.players.find((p) => p.id === topId)?.name ?? "—";
+          const myGuess = myGuesses[String(i)];
+          const myGuessName =
+            room.players.find((p) => p.id === myGuess)?.name ?? "—";
+          const correct = myGuess === topId;
+
+          return (
+            <div key={i} className="reveal-question-block">
+              <p className="question-big-text">{q}</p>
+              <p className="hint">
+                Gagnant : <strong>{topName}</strong>
+                {myGuess ? (
+                  <>
+                    {" "}
+                    — Tu as dit : {myGuessName} {correct ? "✅ +1 pt" : "❌"}
+                  </>
+                ) : null}
+              </p>
+            </div>
+          );
+        })}
       </div>
 
       <div className="card">
@@ -581,20 +714,14 @@ function RoundEndScreen({
         <ul className="player-list">
           {[...room.players]
             .sort((a, b) => b.score - a.score)
-            .map((p) => {
-              const guess = room.round?.guesses[p.id];
-              const correct = guess === room.round?.question;
-              return (
-                <li key={p.id} className="player-chip">
-                  <span>
-                    {p.name} {correct ? "✅" : "❌"}
-                  </span>
-                  <span className="score">
-                    {p.score} pt{p.score !== 1 ? "s" : ""}
-                  </span>
-                </li>
-              );
-            })}
+            .map((p) => (
+              <li key={p.id} className="player-chip">
+                <span>{p.name}</span>
+                <span className="score">
+                  {p.score} pt{p.score !== 1 ? "s" : ""}
+                </span>
+              </li>
+            ))}
         </ul>
       </div>
 
@@ -762,8 +889,13 @@ function GameScreen({
         <RankingScreen
           room={room}
           playerId={session.playerId}
-          onSubmit={async (order) => {
-            await dispatch({ action: "rank", playerId: session.playerId, order });
+          onSubmit={async (questionIndex, order) => {
+            await dispatch({
+              action: "rank",
+              playerId: session.playerId,
+              questionIndex,
+              order,
+            });
           }}
         />
       )}
@@ -782,11 +914,12 @@ function GameScreen({
         <GuessScreen
           room={room}
           playerId={session.playerId}
-          onGuess={async (question) => {
+          onGuess={async (questionIndex, guessedPlayerId) => {
             await dispatch({
               action: "guess",
               playerId: session.playerId,
-              question,
+              questionIndex,
+              guessedPlayerId,
             });
           }}
         />
@@ -795,6 +928,7 @@ function GameScreen({
       {room.phase === "round-end" && (
         <RoundEndScreen
           room={room}
+          playerId={session.playerId}
           isHost={isHost}
           isLastRound={isLastRound}
           onNext={async () => {
@@ -812,6 +946,16 @@ function GameScreen({
           }}
           onLeave={handleLeave}
         />
+      )}
+
+      {room.phase !== "lobby" && room.phase !== "game-end" && (
+        <button
+          className="btn btn-ghost leave-btn"
+          type="button"
+          onClick={handleLeave}
+        >
+          Quitter la partie
+        </button>
       )}
     </>
   );
