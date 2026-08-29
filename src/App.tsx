@@ -14,7 +14,7 @@ import {
   normalizeRoomCode,
 } from "../shared/game";
 import { useRoom } from "./hooks/useRoom";
-import type { Player, RoomState, Session } from "./types";
+import type { Player, QuestionItem, RoomState, Session } from "./types";
 import { clearRoomUrl, getRoomCodeFromUrl, redirectQueryRoomToPath, roomUrl, setRoomUrl } from "./url";
 
 function RoomCodeBanner({ code }: { code: string }) {
@@ -341,7 +341,7 @@ function QuestionList({
   activeIndex,
   completedIndices,
 }: {
-  questions: string[];
+  questions: QuestionItem[];
   activeIndex?: number;
   completedIndices?: Set<number>;
 }) {
@@ -349,11 +349,14 @@ function QuestionList({
     <div className="question-list">
       {questions.map((q, i) => (
         <div
-          key={i}
+          key={q.id}
           className={`question-big ${activeIndex === i ? "active" : ""} ${completedIndices?.has(i) ? "done" : ""}`}
         >
           <span className="question-num">{i + 1}</span>
-          <p>{q}</p>
+          <div className="question-big-content">
+            <span className="theme-badge">{q.theme}</span>
+            <p>{q.question}</p>
+          </div>
         </div>
       ))}
     </div>
@@ -422,7 +425,8 @@ function RankingScreen({
 
       <div className="card card-highlight">
         <p className="phase-label">Question {currentIndex + 1}/{questions.length}</p>
-        <p className="question-hero">{currentQuestion}</p>
+        <span className="theme-badge theme-badge-lg">{currentQuestion.theme}</span>
+        <p className="question-hero">{currentQuestion.question}</p>
       </div>
 
       <QuestionList
@@ -516,7 +520,8 @@ function GuessScreen({
     <>
       <div className="card card-highlight">
         <p className="phase-label">Question {currentIndex + 1}/{questions.length}</p>
-        <p className="question-hero">{currentQuestion}</p>
+        <span className="theme-badge theme-badge-lg">{currentQuestion.theme}</span>
+        <p className="question-hero">{currentQuestion.question}</p>
       </div>
 
       <QuestionList
@@ -582,8 +587,9 @@ function RoundEndScreen({
           const correct = myGuess === topId;
 
           return (
-            <div key={i} className="reveal-question-block">
-              <p className="question-big-text">{q}</p>
+            <div key={q.id} className="reveal-question-block">
+              <span className="theme-badge">{q.theme}</span>
+              <p className="question-big-text">{q.question}</p>
               <p className="hint">
                 Gagnant : <strong>{topName}</strong>
                 {myGuess ? (

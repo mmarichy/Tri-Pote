@@ -8,7 +8,7 @@ import {
   normalizeRoomCode,
   pickQuestion,
 } from "./game.js";
-import type { Player, RoomAction, RoomState } from "./types.js";
+import type { Player, QuestionItem, RoomAction, RoomState } from "./types.js";
 import {
   PLAYER_INACTIVE_MS,
   QUESTIONS_PER_ROUND,
@@ -18,10 +18,10 @@ import { deleteRoom, getRoom, roomExists, saveRoom } from "./store.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 
-function loadQuestions(): string[] {
+function loadQuestions(): QuestionItem[] {
   const file = join(moduleDir, "questions.json");
   const data = JSON.parse(readFileSync(file, "utf-8")) as {
-    questions: string[];
+    questions: QuestionItem[];
   };
   return data.questions;
 }
@@ -354,14 +354,14 @@ async function persistRoom(room: RoomState | null, code: string): Promise<void> 
 
 function startRound(room: RoomState): RoomState {
   const pool = loadQuestions();
-  const roundQuestions: string[] = [];
+  const roundQuestions: QuestionItem[] = [];
   const used = [...room.usedQuestions];
 
   for (let i = 0; i < QUESTIONS_PER_ROUND; i++) {
-    const question = pickQuestion(pool, used);
-    if (!question) break;
-    roundQuestions.push(question);
-    used.push(question);
+    const item = pickQuestion(pool, used);
+    if (!item) break;
+    roundQuestions.push(item);
+    used.push(item.id);
   }
 
   if (roundQuestions.length === 0) {

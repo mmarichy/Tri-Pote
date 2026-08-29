@@ -5,8 +5,14 @@ export type Phase =
   | "round-end"
   | "game-end";
 
+export interface QuestionItem {
+  id: number;
+  theme: string;
+  question: string;
+}
+
 export interface QuestionsData {
-  questions: string[];
+  questions: QuestionItem[];
 }
 
 export interface Player {
@@ -26,7 +32,7 @@ export interface RankingEntry {
 export type PlayerVotes = Record<string, Record<string, string>>;
 
 export interface RoundState {
-  questions: string[];
+  questions: QuestionItem[];
   rankings: PlayerVotes;
   guesses: PlayerVotes;
   rankingDeadline: number;
@@ -47,7 +53,7 @@ export interface RoomState {
   phase: Phase;
   totalRounds: number;
   currentRound: number;
-  usedQuestions: string[];
+  usedQuestions: number[];
   round: RoundState | null;
   lastSeen: Record<string, number>;
 }

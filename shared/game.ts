@@ -1,5 +1,7 @@
 import type { Player, RankingEntry } from "./types";
 
+import type { QuestionItem } from "./types";
+
 export function shuffle<T>(array: T[]): T[] {
   const copy = [...array];
   for (let i = copy.length - 1; i > 0; i--) {
@@ -10,11 +12,11 @@ export function shuffle<T>(array: T[]): T[] {
 }
 
 export function pickQuestion(
-  questions: string[],
-  used: Set<string> | string[]
-): string | null {
+  questions: QuestionItem[],
+  used: Set<number> | number[]
+): QuestionItem | null {
   const usedSet = used instanceof Set ? used : new Set(used);
-  const available = questions.filter((q) => !usedSet.has(q));
+  const available = questions.filter((q) => !usedSet.has(q.id));
   if (available.length === 0) return null;
   return available[Math.floor(Math.random() * available.length)];
 }

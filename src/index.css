@@ -663,6 +663,31 @@ input[type="number"]:focus {
   transition: all 0.3s var(--ease-out);
 }
 
+.question-big-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.theme-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pink);
+  background: rgba(244, 114, 182, 0.12);
+  border: 1px solid rgba(244, 114, 182, 0.25);
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  margin-bottom: 0.35rem;
+}
+
+.theme-badge-lg {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.65rem;
+  margin-bottom: 0.65rem;
+}
+
 .question-big p {
   margin: 0;
   font-size: 0.95rem;
