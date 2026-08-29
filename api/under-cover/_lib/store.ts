@@ -1,6 +1,6 @@
 import { Redis } from "@upstash/redis";
-import type { RoomState } from "../../../under-cover/shared/types.js";
-import { parseRoomState, roomKey, presenceKey } from "../../../under-cover/shared/schemas.js";
+import type { RoomState } from "./types.js";
+import { parseRoomState, roomKey, presenceKey } from "./schemas.js";
 
 const memory = new Map<string, RoomState>();
 const memoryPresence = new Map<string, number>();

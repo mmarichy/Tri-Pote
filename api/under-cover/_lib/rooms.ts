@@ -1,4 +1,4 @@
-import { createId, generateRoomCode, isValidRoomCode, normalizeRoomCode } from "../../../under-cover/shared/roomCode.js";
+import { createId, generateRoomCode, isValidRoomCode, normalizeRoomCode } from "./roomCode.js";
 import {
   advanceAfterReveal,
   advanceDebate,
@@ -8,9 +8,9 @@ import {
   startGame,
   submitClue,
   toRoomView,
-} from "../../../under-cover/shared/gameEngine.js";
-import type { RoomAction, RoomState, RoomView } from "../../../under-cover/shared/types.js";
-import { MAX_PLAYERS, MIN_PLAYERS } from "../../../under-cover/shared/types.js";
+} from "./gameEngine.js";
+import type { RoomAction, RoomState, RoomView } from "./types.js";
+import { MAX_PLAYERS, MIN_PLAYERS } from "./types.js";
 import {
   deleteRoom,
   getPresenceMap,

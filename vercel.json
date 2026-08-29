@@ -12,7 +12,7 @@
       "includeFiles": "api/rooms/_lib/**"
     },
     "api/under-cover/**/*.js": {
-      "includeFiles": "api/under-cover/_lib/**,under-cover/shared/**"
+      "includeFiles": "api/under-cover/_lib/**"
     }
   }
 }
