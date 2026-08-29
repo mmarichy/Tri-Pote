@@ -1340,6 +1340,36 @@ input[type="number"]:focus {
   font-size: 1.05rem;
 }
 
+/* ── Quit button (top-left) ── */
+.quit-btn-top {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+}
+
+.quit-btn-top:hover {
+  color: #fff;
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.12);
+  transform: translateX(-2px);
+}
+
 /* ── Round info ── */
 .round-info {
   display: flex;

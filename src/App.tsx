@@ -305,7 +305,6 @@ function LobbyScreen({
   onStart,
   onSetThemes,
   onKick,
-  onLeave,
 }: {
   room: RoomState;
   playerId: string;
@@ -313,7 +312,6 @@ function LobbyScreen({
   onStart: (rounds: number, questionsPerRound: number) => Promise<void>;
   onSetThemes: (themes: string[]) => Promise<void>;
   onKick: (targetId: string) => Promise<void>;
-  onLeave: () => void;
 }) {
   const [rounds, setRounds] = useState(room.totalRounds);
   const [questionsPerRound, setQuestionsPerRound] = useState(
@@ -415,10 +413,6 @@ function LobbyScreen({
             <p>En attente que l'hôte lance la partie...</p>
           </div>
         )}
-
-        <button className="btn btn-ghost" type="button" onClick={onLeave}>
-          Quitter la partie
-        </button>
       </div>
 
       <aside className="lobby-sidebar" aria-label="Sélection des thèmes">
@@ -1032,6 +1026,15 @@ function GameScreen({
 
   return (
     <>
+      <button
+        className="quit-btn-top fade-in"
+        type="button"
+        onClick={handleLeave}
+        aria-label="Quitter la partie"
+      >
+        ← Quitter
+      </button>
+
       {error && <p className="error shake">{error}</p>}
 
       {room.phase !== "lobby" && room.phase !== "game-end" && (
@@ -1072,7 +1075,6 @@ function GameScreen({
               targetId,
             });
           }}
-          onLeave={handleLeave}
         />
       )}
 
@@ -1154,16 +1156,6 @@ function GameScreen({
           }}
           onLeave={handleLeave}
         />
-      )}
-
-      {room.phase !== "lobby" && room.phase !== "game-end" && (
-        <button
-          className="btn btn-ghost leave-btn fade-in"
-          type="button"
-          onClick={handleLeave}
-        >
-          Quitter la partie
-        </button>
       )}
       </div>
     </>
