@@ -81,5 +81,8 @@ export function isValidRoomCode(code: string): boolean {
 }
 
 export function createId(): string {
-  return crypto.randomUUID();
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }

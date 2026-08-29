@@ -1,4 +1,4 @@
-import questionsData from "../../public/questions.json";
+import questionsData from "./questions.json";
 import {
   buildChoices,
   createId,

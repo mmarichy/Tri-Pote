@@ -1,12 +1,12 @@
 {
-  "name": "vote-party",
+  "name": "Tri-Pote",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vercel dev",
     "dev:vite": "vite",
-    "build": "tsc && vite build",
+    "build": "node scripts/sync-questions.mjs && tsc && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

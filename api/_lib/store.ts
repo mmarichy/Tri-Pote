@@ -2,6 +2,7 @@ import { Redis } from "@upstash/redis";
 import type { RoomState } from "../../shared/types";
 
 const memory = new Map<string, RoomState>();
+const TTL_SECONDS = 60 * 60 * 4;
 
 function getRedis(): Redis | null {
   const url = process.env.UPSTASH_REDIS_REST_URL;
@@ -10,10 +11,8 @@ function getRedis(): Redis | null {
   return new Redis({ url, token });
 }
 
-const redis = getRedis();
-const TTL_SECONDS = 60 * 60 * 4;
-
 export async function getRoom(code: string): Promise<RoomState | null> {
+  const redis = getRedis();
   const key = `room:${code}`;
   if (redis) {
     return redis.get<RoomState>(key);
@@ -22,6 +21,7 @@ export async function getRoom(code: string): Promise<RoomState | null> {
 }
 
 export async function saveRoom(room: RoomState): Promise<void> {
+  const redis = getRedis();
   const key = `room:${room.code}`;
   if (redis) {
     await redis.set(key, room, { ex: TTL_SECONDS });
