@@ -1,7 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import type { RoomAction } from "./_lib/types";
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -17,7 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const { getRoomMeta, getRoomState, handleAction } = await import(
-      "./_lib/rooms"
+      "./_lib/rooms.js"
     );
 
     if (req.method === "GET") {
@@ -30,7 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === "POST") {
-      const room = await handleAction(code, req.body as RoomAction);
+      const room = await handleAction(code, req.body);
       return res.status(200).json({ room });
     }
 

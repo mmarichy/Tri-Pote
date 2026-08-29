@@ -7,9 +7,9 @@ import {
   isValidRoomCode,
   normalizeRoomCode,
   pickQuestion,
-} from "./game";
-import type { Player, RoomAction, RoomState } from "./types";
-import { getRoom, roomExists, saveRoom } from "./store";
+} from "./game.js";
+import type { Player, RoomAction, RoomState } from "./types.js";
+import { getRoom, roomExists, saveRoom } from "./store.js";
 
 function loadQuestions(): string[] {
   const file = join(__dirname, "questions.json");
