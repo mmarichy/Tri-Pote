@@ -2,6 +2,7 @@ export type Phase =
   | "lobby"
   | "round-intro"
   | "ranking"
+  | "guess-intro"
   | "guess"
   | "round-end"
   | "game-end";
@@ -58,6 +59,8 @@ export interface RoomState {
   usedQuestions: number[];
   /** Nombre de questions tirées par manche (réglé par l'hôte au lancement) */
   questionsPerRound: number;
+  /** Thèmes actifs pour le tirage des questions (réglés par l'hôte au lobby) */
+  selectedThemes: string[];
   round: RoundState | null;
   lastSeen: Record<string, number>;
 }
@@ -72,7 +75,9 @@ export type RoomAction =
   | { action: "leave"; playerId: string }
   | { action: "kick"; playerId: string; targetId: string }
   | { action: "start"; playerId: string; totalRounds: number; questionsPerRound: number }
+  | { action: "set-themes"; playerId: string; themes: string[] }
   | { action: "begin-votes"; playerId: string }
+  | { action: "begin-guess"; playerId: string }
   | {
       action: "rank";
       playerId: string;

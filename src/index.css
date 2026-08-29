@@ -793,6 +793,68 @@ input[type="number"]:focus {
   margin-top: 0.35rem;
 }
 
+.theme-picker-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.theme-picker-header h2 {
+  margin: 0;
+}
+
+.theme-picker-count {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--pink);
+  white-space: nowrap;
+}
+
+.theme-picker-all {
+  margin-bottom: 0.75rem;
+}
+
+.theme-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.theme-chip {
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: #9ca3af;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+}
+
+.theme-chip:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: #fff;
+}
+
+.theme-chip.active {
+  background: rgba(244, 114, 182, 0.15);
+  border-color: rgba(244, 114, 182, 0.45);
+  color: #fff;
+}
+
+.theme-chip:disabled:not(.active) {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.theme-chip:disabled.active {
+  cursor: default;
+}
+
 .question-hero {
   margin: 0;
   font-size: 1.4rem;

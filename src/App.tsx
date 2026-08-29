@@ -14,6 +14,7 @@ import {
   normalizeRoomCode,
 } from "../shared/game";
 import { DEFAULT_QUESTIONS_PER_ROUND, MAX_QUESTIONS_PER_ROUND } from "./types";
+import { ALL_THEMES } from "../shared/themes";
 import { useRoom } from "./hooks/useRoom";
 import type { Player, RoomState, Session } from "./types";
 import { clearRoomUrl, getRoomCodeFromUrl, redirectQueryRoomToPath, roomUrl, setRoomUrl } from "./url";
@@ -209,11 +210,88 @@ function HomeScreen({
   );
 }
 
+function ThemePicker({
+  selectedThemes,
+  isHost,
+  onChange,
+}: {
+  selectedThemes: string[];
+  isHost: boolean;
+  onChange: (themes: string[]) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const selected = new Set(selectedThemes);
+
+  const applyThemes = async (themes: string[]) => {
+    setBusy(true);
+    setError("");
+    try {
+      await onChange(themes);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggle = (theme: string) => {
+    if (!isHost || busy) return;
+    if (selected.has(theme)) {
+      if (selected.size <= 1) return;
+      void applyThemes(selectedThemes.filter((t) => t !== theme));
+    } else {
+      void applyThemes([...selectedThemes, theme]);
+    }
+  };
+
+  return (
+    <div className="card">
+      <div className="theme-picker-header">
+        <h2>Thèmes</h2>
+        <span className="theme-picker-count">
+          {selectedThemes.length}/{ALL_THEMES.length} actifs
+        </span>
+      </div>
+      <p className="hint hint--compact">
+        {isHost
+          ? "Choisis les thèmes des questions — tout le monde voit ta sélection en direct."
+          : "L'hôte choisit les thèmes — tu vois la sélection en direct."}
+      </p>
+      {isHost && (
+        <button
+          className="btn btn-secondary btn-sm theme-picker-all"
+          type="button"
+          disabled={busy || selectedThemes.length === ALL_THEMES.length}
+          onClick={() => applyThemes([...ALL_THEMES])}
+        >
+          Tout sélectionner
+        </button>
+      )}
+      <div className="theme-grid">
+        {ALL_THEMES.map((theme) => (
+          <button
+            key={theme}
+            type="button"
+            className={`theme-chip ${selected.has(theme) ? "active" : ""}`}
+            disabled={!isHost || busy}
+            onClick={() => toggle(theme)}
+          >
+            {theme}
+          </button>
+        ))}
+      </div>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 function LobbyScreen({
   room,
   playerId,
   isHost,
   onStart,
+  onSetThemes,
   onKick,
   onLeave,
 }: {
@@ -221,6 +299,7 @@ function LobbyScreen({
   playerId: string;
   isHost: boolean;
   onStart: (rounds: number, questionsPerRound: number) => Promise<void>;
+  onSetThemes: (themes: string[]) => Promise<void>;
   onKick: (targetId: string) => Promise<void>;
   onLeave: () => void;
 }) {
@@ -283,6 +362,12 @@ function LobbyScreen({
         </ul>
       </div>
 
+      <ThemePicker
+        selectedThemes={room.selectedThemes ?? [...ALL_THEMES]}
+        isHost={isHost}
+        onChange={onSetThemes}
+      />
+
       {isHost ? (
         <div className="card">
           <h2>Paramètres</h2>
@@ -312,7 +397,7 @@ function LobbyScreen({
           <button
             className="btn btn-primary"
             type="button"
-            disabled={busy || room.players.length < 2}
+            disabled={busy || room.players.length < 2 || (room.selectedThemes?.length ?? 0) === 0}
             onClick={handleStart}
           >
             Lancer la partie
@@ -352,8 +437,16 @@ function RoundIntroScreen({
         <p className="phase-label">Manche {room.currentRound} / {room.totalRounds}</p>
         <h2 className="round-intro-title">Prêt pour les votes ?</h2>
         <p className="hint">
-          Cette manche compte <strong>{questionCount} question{questionCount !== 1 ? "s" : ""}</strong>.
-          Les questions restent secrètes jusqu'au lancement.
+          Cette manche compte <strong>{questionCount} question{questionCount !== 1 ? "s" : ""}</strong>
+          {room.selectedThemes?.length ? (
+            <>
+              {" "}
+              — thèmes :{" "}
+              <strong>{room.selectedThemes.length}</strong> sélectionné
+              {room.selectedThemes.length !== 1 ? "s" : ""}
+            </>
+          ) : null}
+          . Les questions restent secrètes jusqu'au lancement.
         </p>
       </div>
 
@@ -383,6 +476,7 @@ function RoundIntroScreen({
         <h2>Rappel</h2>
         <ul className="rules-list">
           <li>Phase 1 — Vote pour un joueur par question</li>
+          <li>Pause — L'hôte lance la phase 2 quand tout le monde a voté</li>
           <li>Phase 2 — Devine qui a été le plus voté (+1 pt)</li>
           <li>Les questions s'enchaînent une par une à ton rythme</li>
         </ul>
@@ -412,6 +506,76 @@ function RoundIntroScreen({
       ) : (
         <div className="waiting-banner">
           <p>En attente que l'hôte lance les votes…</p>
+        </div>
+      )}
+    </>
+  );
+}
+
+function GuessIntroScreen({
+  room,
+  isHost,
+  onBeginGuess,
+}: {
+  room: RoomState;
+  isHost: boolean;
+  onBeginGuess: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const questionCount = room.round?.questions.length ?? 0;
+  const progress = room.round?.progress;
+
+  return (
+    <>
+      <div className="card card-highlight">
+        <p className="phase-label">Phase 1 terminée</p>
+        <h2 className="round-intro-title">Prêt pour la devinette ?</h2>
+        <p className="hint">
+          Tout le monde a voté sur les <strong>{questionCount} question{questionCount !== 1 ? "s" : ""}</strong>.
+          Place à la phase 2 : devine qui a été le plus voté (+1 pt par bonne réponse).
+        </p>
+      </div>
+
+      <div className="card">
+        <h2>Rappel phase 2</h2>
+        <ul className="rules-list">
+          <li>Les mêmes questions reviennent une par une</li>
+          <li>Devine le joueur le plus voté par le groupe</li>
+          <li>Les résultats seront révélés à la fin de la manche</li>
+        </ul>
+      </div>
+
+      {progress && (
+        <p className="hint hint--compact">
+          Joueurs prêts : {progress.rankingsDone}/{progress.totalPlayers}
+        </p>
+      )}
+
+      {error && <p className="error">{error}</p>}
+
+      {isHost ? (
+        <button
+          className="btn btn-primary"
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            setError("");
+            try {
+              await onBeginGuess();
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Erreur");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Lancer la devinette →
+        </button>
+      ) : (
+        <div className="waiting-banner">
+          <p>En attente que l'hôte lance la devinette…</p>
         </div>
       )}
     </>
@@ -878,6 +1042,13 @@ function GameScreen({
               questionsPerRound,
             });
           }}
+          onSetThemes={async (themes) => {
+            await dispatch({
+              action: "set-themes",
+              playerId: session.playerId,
+              themes,
+            });
+          }}
           onKick={async (targetId) => {
             await dispatch({
               action: "kick",
@@ -913,6 +1084,19 @@ function GameScreen({
               playerId: session.playerId,
               questionIndex,
               votedPlayerId,
+            });
+          }}
+        />
+      )}
+
+      {room.phase === "guess-intro" && (
+        <GuessIntroScreen
+          room={room}
+          isHost={isHost}
+          onBeginGuess={async () => {
+            await dispatch({
+              action: "begin-guess",
+              playerId: session.playerId,
             });
           }}
         />

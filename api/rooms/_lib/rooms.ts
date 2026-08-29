@@ -34,6 +34,37 @@ function assertQuestions() {
   }
 }
 
+function assertThemeSelection(room: RoomState): void {
+  const themes = normalizeThemes(room.selectedThemes ?? []);
+  if (themes.length === 0) {
+    throw new Error("Sélectionne au moins un thème");
+  }
+  const pool = getQuestionPool({ ...room, selectedThemes: themes });
+  if (pool.length === 0) {
+    throw new Error("Aucune question disponible pour ces thèmes");
+  }
+}
+
+function loadAllThemes(): string[] {
+  const themes = new Set(loadQuestions().map((q) => q.theme));
+  return [...themes];
+}
+
+function getQuestionPool(room: RoomState): QuestionItem[] {
+  const all = loadQuestions();
+  const themes =
+    room.selectedThemes?.length > 0
+      ? room.selectedThemes
+      : loadAllThemes();
+  const themeSet = new Set(themes);
+  return all.filter((q) => themeSet.has(q.theme));
+}
+
+function normalizeThemes(themes: string[]): string[] {
+  const valid = new Set(loadAllThemes());
+  return [...new Set(themes.filter((t) => valid.has(t)))];
+}
+
 function isPlayerVotesComplete(
   entries: Record<string, string> | undefined,
   questionCount: number
@@ -123,8 +154,13 @@ function computeWinners(room: RoomState): Record<string, string> {
 function finalizeRankingPhase(room: RoomState): RoomState {
   if (!room.round) return room;
   room.round.winners = computeWinners(room);
-  room.phase = "guess";
+  room.phase = "guess-intro";
   return room;
+}
+
+function beginGuessPhase(room: RoomState): RoomState {
+  if (!room.round) return room;
+  return { ...room, phase: "guess" };
 }
 
 function buildProgress(room: RoomState) {
@@ -155,6 +191,21 @@ function sanitizeRoomForPlayer(room: RoomState, viewerId?: string): RoomState {
   const progress = buildProgress(room);
 
   if (room.phase === "round-intro") {
+    return {
+      ...room,
+      round: room.round
+        ? {
+            ...room.round,
+            rankings: {},
+            guesses: {},
+            winners: undefined,
+            progress: buildProgress(room),
+          }
+        : null,
+    };
+  }
+
+  if (room.phase === "guess-intro") {
     return {
       ...room,
       round: room.round
@@ -357,6 +408,9 @@ function processRoom(
   if (next.questionsPerRound === undefined) {
     next.questionsPerRound = DEFAULT_QUESTIONS_PER_ROUND;
   }
+  if (!next.selectedThemes?.length) {
+    next.selectedThemes = loadAllThemes();
+  }
   if (activePlayerId) {
     next = touchPresence(next, activePlayerId);
   }
@@ -374,7 +428,7 @@ async function persistRoom(room: RoomState | null, code: string): Promise<void> 
 }
 
 function prepareRound(room: RoomState): RoomState {
-  const pool = loadQuestions();
+  const pool = getQuestionPool(room);
   const roundQuestions: QuestionItem[] = [];
   const used = [...room.usedQuestions];
   const count = room.questionsPerRound;
@@ -442,6 +496,7 @@ export async function createRoom(hostName: string): Promise<RoomState> {
     currentRound: 0,
     usedQuestions: [],
     questionsPerRound: DEFAULT_QUESTIONS_PER_ROUND,
+    selectedThemes: loadAllThemes(),
     round: null,
     lastSeen: { [hostId]: now },
   };
@@ -538,6 +593,7 @@ export async function handleAction(
           `Maximum ${MAX_QUESTIONS_PER_ROUND} questions par manche`
         );
       }
+      assertThemeSelection(room);
 
       room.totalRounds = payload.totalRounds;
       room.questionsPerRound = payload.questionsPerRound;
@@ -549,6 +605,22 @@ export async function handleAction(
       return next;
     }
 
+    case "set-themes": {
+      if (!isHost(room, payload.playerId)) {
+        throw new Error("Seul l'hôte peut modifier les thèmes");
+      }
+      if (room.phase !== "lobby") {
+        throw new Error("Les thèmes ne peuvent être modifiés qu'au lobby");
+      }
+      const themes = normalizeThemes(payload.themes);
+      if (themes.length === 0) {
+        throw new Error("Sélectionne au moins un thème");
+      }
+      room.selectedThemes = themes;
+      await saveRoom(room);
+      return room;
+    }
+
     case "begin-votes": {
       if (!isHost(room, payload.playerId)) {
         throw new Error("Seul l'hôte peut lancer les votes");
@@ -557,6 +629,18 @@ export async function handleAction(
         throw new Error("Phase invalide");
       }
       const next = beginRankingPhase(room);
+      await saveRoom(next);
+      return next;
+    }
+
+    case "begin-guess": {
+      if (!isHost(room, payload.playerId)) {
+        throw new Error("Seul l'hôte peut lancer la devinette");
+      }
+      if (room.phase !== "guess-intro" || !room.round) {
+        throw new Error("Phase invalide");
+      }
+      const next = beginGuessPhase(room);
       await saveRoom(next);
       return next;
     }
