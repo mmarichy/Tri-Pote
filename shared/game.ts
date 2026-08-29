@@ -88,7 +88,7 @@ export function getTopPlayerForQuestion(
 }
 
 export function countCompletedRankings(
-  playerRankings: Record<string, string[]> | undefined,
+  playerRankings: Record<string, string> | undefined,
   questionCount: number
 ): number {
   if (!playerRankings) return 0;

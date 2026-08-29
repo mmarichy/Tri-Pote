@@ -4,11 +4,9 @@ import { fileURLToPath } from "url";
 import {
   createId,
   generateRoomCode,
-  getTopPlayerForQuestion,
   isValidRoomCode,
   normalizeRoomCode,
   pickQuestion,
-  shuffle,
 } from "./game.js";
 import type { Player, RoomAction, RoomState } from "./types.js";
 import {
@@ -46,28 +44,28 @@ function findPlayer(room: RoomState, playerId: string): Player | undefined {
 function allRankingsComplete(room: RoomState): boolean {
   if (!room.round) return false;
   const qCount = room.round.questions.length;
-  return room.players.every((p) => {
-    const byPlayer = room.round!.rankings[p.id];
-    if (!byPlayer) return false;
-    for (let i = 0; i < qCount; i++) {
-      const order = byPlayer[String(i)];
-      if (!order || order.length !== room.players.length) return false;
-    }
-    return true;
-  });
+  return room.players.every((p) =>
+    isPlayerVotesComplete(room.round!.rankings[p.id], qCount)
+  );
 }
 
 function allGuessesComplete(room: RoomState): boolean {
   if (!room.round) return false;
   const qCount = room.round.questions.length;
-  return room.players.every((p) => {
-    const byPlayer = room.round!.guesses[p.id];
-    if (!byPlayer) return false;
-    for (let i = 0; i < qCount; i++) {
-      if (!byPlayer[String(i)]) return false;
-    }
-    return true;
-  });
+  return room.players.every((p) =>
+    isPlayerVotesComplete(room.round!.guesses[p.id], qCount)
+  );
+}
+
+function isPlayerVotesComplete(
+  entries: Record<string, string> | undefined,
+  questionCount: number
+): boolean {
+  if (!entries) return false;
+  for (let i = 0; i < questionCount; i++) {
+    if (!entries[String(i)]) return false;
+  }
+  return true;
 }
 
 function scoreRound(room: RoomState): void {
@@ -85,35 +83,43 @@ function scoreRound(room: RoomState): void {
 }
 
 function isPlayerRankingComplete(
-  playerRankings: Record<string, string[]> | undefined,
+  playerRankings: Record<string, string> | undefined,
   questionCount: number
 ): boolean {
-  if (!playerRankings) return false;
-  for (let i = 0; i < questionCount; i++) {
-    const order = playerRankings[String(i)];
-    if (!order?.length) return false;
-  }
-  return true;
+  return isPlayerVotesComplete(playerRankings, questionCount);
 }
 
 function isPlayerGuessesComplete(
   playerGuesses: Record<string, string> | undefined,
   questionCount: number
 ): boolean {
-  if (!playerGuesses) return false;
-  for (let i = 0; i < questionCount; i++) {
-    if (!playerGuesses[String(i)]) return false;
-  }
-  return true;
+  return isPlayerVotesComplete(playerGuesses, questionCount);
 }
 
 function computeWinners(room: RoomState): Record<string, string> {
   if (!room.round) return {};
   const winners: Record<string, string> = {};
+
   for (let i = 0; i < room.round.questions.length; i++) {
-    const top = getTopPlayerForQuestion(room.players, room.round.rankings, i);
-    if (top) winners[String(i)] = top;
+    const key = String(i);
+    const counts = new Map<string, number>();
+
+    for (const player of room.players) {
+      const vote = room.round.rankings[player.id]?.[key];
+      if (vote) counts.set(vote, (counts.get(vote) ?? 0) + 1);
+    }
+
+    let bestId = room.players[0]?.id ?? "";
+    let bestCount = -1;
+    for (const [id, count] of counts) {
+      if (count > bestCount) {
+        bestCount = count;
+        bestId = id;
+      }
+    }
+    if (bestCount >= 0) winners[key] = bestId;
   }
+
   return winners;
 }
 
@@ -188,17 +194,13 @@ function sanitizeRoomForPlayer(room: RoomState, viewerId?: string): RoomState {
 }
 
 function cleanNestedRankings(
-  rankings: Record<string, Record<string, string[]>>,
+  rankings: Record<string, Record<string, string>>,
   removedId: string
-): Record<string, Record<string, string[]>> {
-  const result: Record<string, Record<string, string[]>> = {};
+): Record<string, Record<string, string>> {
+  const result: Record<string, Record<string, string>> = {};
   for (const [pid, byQ] of Object.entries(rankings)) {
     if (pid === removedId) continue;
-    const cleaned: Record<string, string[]> = {};
-    for (const [qIdx, order] of Object.entries(byQ)) {
-      cleaned[qIdx] = order.filter((id) => id !== removedId);
-    }
-    result[pid] = cleaned;
+    result[pid] = { ...byQ };
   }
   return result;
 }
@@ -286,7 +288,8 @@ function applyRankingTimeout(room: RoomState): RoomState {
     for (let i = 0; i < room.round.questions.length; i++) {
       const key = String(i);
       if (!room.round.rankings[player.id][key]) {
-        room.round.rankings[player.id][key] = shuffle([...playerIds]);
+        room.round.rankings[player.id][key] =
+          playerIds[Math.floor(Math.random() * playerIds.length)];
       }
     }
   }
@@ -520,21 +523,13 @@ export async function handleAction(
       }
       const qKey = String(qIndex);
       if (room.round.rankings[payload.playerId][qKey]) {
-        throw new Error("Classement déjà envoyé pour cette question");
+        throw new Error("Vote déjà envoyé pour cette question");
+      }
+      if (!findPlayer(room, payload.votedPlayerId)) {
+        throw new Error("Joueur invalide");
       }
 
-      const order = payload.order;
-      const expected = room.players.map((p) => p.id);
-      if (order.length !== expected.length) {
-        throw new Error("Classement incomplet");
-      }
-      const sortedExpected = [...expected].sort();
-      const sortedOrder = [...order].sort();
-      if (sortedExpected.some((id, i) => id !== sortedOrder[i])) {
-        throw new Error("Classement invalide");
-      }
-
-      room.round.rankings[payload.playerId][qKey] = order;
+      room.round.rankings[payload.playerId][qKey] = payload.votedPlayerId;
 
       if (allRankingsComplete(room)) {
         room = finalizeRankingPhase(room);

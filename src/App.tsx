@@ -363,45 +363,33 @@ function QuestionList({
 function RankingScreen({
   room,
   playerId,
-  onSubmit,
+  onVote,
 }: {
   room: RoomState;
   playerId: string;
-  onSubmit: (questionIndex: number, order: string[]) => Promise<void>;
+  onVote: (questionIndex: number, votedPlayerId: string) => Promise<void>;
 }) {
   const questions = room.round?.questions ?? [];
-  const playerRankings = room.round?.rankings[playerId];
+  const playerVotes = room.round?.rankings[playerId];
   const completed = new Set<number>();
   for (let i = 0; i < questions.length; i++) {
-    if (playerRankings?.[String(i)]) completed.add(i);
+    if (playerVotes?.[String(i)]) completed.add(i);
   }
 
   const currentIndex =
-    nextPendingIndex(playerRankings, questions.length) ?? questions.length - 1;
-  const allDone = countCompletedRankings(playerRankings, questions.length) === questions.length;
+    nextPendingIndex(playerVotes, questions.length) ?? questions.length - 1;
+  const allDone =
+    countCompletedRankings(playerVotes, questions.length) === questions.length;
 
-  const [order, setOrder] = useState<string[]>([]);
-  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    setOrder([]);
-  }, [currentIndex, allDone]);
-
-  const rankMap = new Map(order.map((id, i) => [id, i + 1]));
-
-  const handlePick = (id: string) => {
-    if (order.includes(id)) return;
-    setOrder((prev) => [...prev, id]);
-  };
-
-  const handleSubmit = async () => {
-    if (allDone || order.length !== room.players.length) return;
+  const handleVote = async (votedPlayerId: string) => {
+    if (allDone) return;
     setBusy(true);
     setError("");
     try {
-      await onSubmit(currentIndex, order);
-      setOrder([]);
+      await onVote(currentIndex, votedPlayerId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
     } finally {
@@ -414,7 +402,7 @@ function RankingScreen({
     return (
       <div className="waiting-banner">
         <div className="emoji">✅</div>
-        <p>Tous tes classements sont envoyés !</p>
+        <p>Tous tes votes sont envoyés !</p>
         <QuestionList questions={questions} completedIndices={completed} />
         <p className="hint">
           En attente des autres ({progress?.rankingsDone ?? 0}/
@@ -444,55 +432,28 @@ function RankingScreen({
       />
 
       <div className="card">
-        <h2>Ton classement</h2>
+        <h2>Qui choisis-tu ?</h2>
         <p className="hint">
-          Classe du <strong>plus voté</strong> au <strong>moins voté</strong>. (
-          {order.length}/{room.players.length})
+          Tape sur <strong>un joueur</strong> — celui qui correspond le mieux à la question.
         </p>
 
         <div className="ranking-pick">
-          {room.players.map((p) => {
-            const rank = rankMap.get(p.id);
-            const picked = rank !== undefined;
-            return (
-              <button
-                key={p.id}
-                type="button"
-                className="rank-btn"
-                disabled={picked}
-                onClick={() => handlePick(p.id)}
-              >
-                <span className={`rank-badge ${picked ? "" : "pending"}`}>
-                  {picked ? rank : "?"}
-                </span>
-                {p.name}
-                {p.id === playerId && " (toi)"}
-              </button>
-            );
-          })}
+          {room.players.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className="guess-player-btn"
+              disabled={busy}
+              onClick={() => handleVote(p.id)}
+            >
+              {p.name}
+              {p.id === playerId && " (toi)"}
+            </button>
+          ))}
         </div>
-
-        {order.length > 0 && (
-          <button
-            className="btn btn-secondary"
-            type="button"
-            onClick={() => setOrder((prev) => prev.slice(0, -1))}
-          >
-            Annuler le dernier choix
-          </button>
-        )}
       </div>
 
       {error && <p className="error">{error}</p>}
-
-      <button
-        className="btn btn-primary"
-        type="button"
-        disabled={busy || order.length !== room.players.length}
-        onClick={handleSubmit}
-      >
-        Valider — question {currentIndex + 1}
-      </button>
     </>
   );
 }
@@ -817,12 +778,12 @@ function GameScreen({
         <RankingScreen
           room={room}
           playerId={session.playerId}
-          onSubmit={async (questionIndex, order) => {
+          onVote={async (questionIndex, votedPlayerId) => {
             await dispatch({
               action: "rank",
               playerId: session.playerId,
               questionIndex,
-              order,
+              votedPlayerId,
             });
           }}
         />

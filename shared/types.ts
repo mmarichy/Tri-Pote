@@ -22,16 +22,13 @@ export interface RankingEntry {
   rank: number;
 }
 
-/** Classements par joueur → index question → ordre des joueurs */
-export type PlayerRankings = Record<string, Record<string, string[]>>;
-
-/** Devinettes par joueur → index question → id du joueur choisi */
-export type PlayerGuesses = Record<string, Record<string, string>>;
+/** Votes phase 1 : joueur → question → joueur choisi */
+export type PlayerVotes = Record<string, Record<string, string>>;
 
 export interface RoundState {
   questions: string[];
-  rankings: PlayerRankings;
-  guesses: PlayerGuesses;
+  rankings: PlayerVotes;
+  guesses: PlayerVotes;
   rankingDeadline: number;
   /** Gagnants par question — visible seulement en fin de manche */
   winners?: Record<string, string>;
@@ -68,7 +65,7 @@ export type RoomAction =
       action: "rank";
       playerId: string;
       questionIndex: number;
-      order: string[];
+      votedPlayerId: string;
     }
   | {
       action: "guess";

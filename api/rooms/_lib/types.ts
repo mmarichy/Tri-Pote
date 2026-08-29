@@ -11,13 +11,12 @@ export interface Player {
   score: number;
 }
 
-export type PlayerRankings = Record<string, Record<string, string[]>>;
-export type PlayerGuesses = Record<string, Record<string, string>>;
+export type PlayerVotes = Record<string, Record<string, string>>;
 
 export interface RoundState {
   questions: string[];
-  rankings: PlayerRankings;
-  guesses: PlayerGuesses;
+  rankings: PlayerVotes;
+  guesses: PlayerVotes;
   rankingDeadline: number;
   winners?: Record<string, string>;
   progress?: {
@@ -52,7 +51,7 @@ export type RoomAction =
       action: "rank";
       playerId: string;
       questionIndex: number;
-      order: string[];
+      votedPlayerId: string;
     }
   | {
       action: "guess";
