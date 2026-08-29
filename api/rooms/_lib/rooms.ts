@@ -1,5 +1,6 @@
 import { readFileSync } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 import {
   buildChoices,
   createId,
@@ -11,8 +12,10 @@ import {
 import type { Player, RoomAction, RoomState } from "./types.js";
 import { getRoom, roomExists, saveRoom } from "./store.js";
 
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+
 function loadQuestions(): string[] {
-  const file = join(__dirname, "questions.json");
+  const file = join(moduleDir, "questions.json");
   const data = JSON.parse(readFileSync(file, "utf-8")) as {
     questions: string[];
   };
