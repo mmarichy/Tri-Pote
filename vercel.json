@@ -4,8 +4,8 @@
   "framework": "vite",
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
   "functions": {
-    "api/**/*.ts": {
-      "includeFiles": "api/_lib/**"
+    "api/rooms/**/*.ts": {
+      "includeFiles": "api/rooms/_lib/**"
     }
   }
 }

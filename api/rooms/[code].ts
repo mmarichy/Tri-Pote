@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import type { RoomAction } from "../_lib/types";
-import { getRoomMeta, getRoomState, handleAction } from "../_lib/rooms";
+import type { RoomAction } from "./_lib/types";
+import { getRoomMeta, getRoomState, handleAction } from "./_lib/rooms";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
