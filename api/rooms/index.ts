@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createRoom } from "./_lib/rooms";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -20,6 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "Nom requis" });
     }
 
+    const { createRoom } = await import("./_lib/rooms");
     const room = await createRoom(hostName);
     return res.status(201).json({
       room,
