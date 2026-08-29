@@ -246,16 +246,19 @@ function ThemePicker({
   };
 
   return (
-    <div className="card">
+    <div className={`card theme-picker-panel ${isHost ? "" : "theme-picker-panel--readonly"}`}>
       <div className="theme-picker-header">
         <h2>Thèmes</h2>
         <span className="theme-picker-count">
-          {selectedThemes.length}/{ALL_THEMES.length} actifs
+          {selectedThemes.length}/{ALL_THEMES.length}
         </span>
       </div>
+      {!isHost && (
+        <span className="theme-readonly-badge">Lecture seule</span>
+      )}
       <p className="hint hint--compact">
         {isHost
-          ? "Choisis les thèmes des questions — tout le monde voit ta sélection en direct."
+          ? "Sélectionne les thèmes — visible par tous en direct."
           : "L'hôte choisit les thèmes — tu vois la sélection en direct."}
       </p>
       {isHost && (
@@ -324,95 +327,99 @@ function LobbyScreen({
   };
 
   return (
-    <>
-      <RoomCodeBanner code={room.code} />
+    <div className="lobby-layout">
+      <div className="lobby-main">
+        <RoomCodeBanner code={room.code} />
 
-      <div className="card">
-        <h2>Joueurs ({room.players.length})</h2>
-        <ul className="player-list stagger-in">
-          {room.players.map((p) => (
-            <li key={p.id} className="player-chip">
-              <span>
-                {p.name}
-                {p.id === room.hostId && " 👑"}
-                {p.id === playerId && " (toi)"}
-              </span>
-              {isHost && p.id !== playerId && (
-                <button
-                  className="btn-kick"
-                  type="button"
-                  disabled={kickingId === p.id}
-                  onClick={async () => {
-                    setKickingId(p.id);
-                    setError("");
-                    try {
-                      await onKick(p.id);
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : "Erreur");
-                    } finally {
-                      setKickingId(null);
-                    }
-                  }}
-                >
-                  Expulser
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+        <div className="card">
+          <h2>Joueurs ({room.players.length})</h2>
+          <ul className="player-list stagger-in">
+            {room.players.map((p) => (
+              <li key={p.id} className="player-chip">
+                <span>
+                  {p.name}
+                  {p.id === room.hostId && " 👑"}
+                  {p.id === playerId && " (toi)"}
+                </span>
+                {isHost && p.id !== playerId && (
+                  <button
+                    className="btn-kick"
+                    type="button"
+                    disabled={kickingId === p.id}
+                    onClick={async () => {
+                      setKickingId(p.id);
+                      setError("");
+                      try {
+                        await onKick(p.id);
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Erreur");
+                      } finally {
+                        setKickingId(null);
+                      }
+                    }}
+                  >
+                    Expulser
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {isHost ? (
+          <div className="card">
+            <h2>Paramètres</h2>
+            <label htmlFor="rounds">Nombre de manches</label>
+            <input
+              id="rounds"
+              type="number"
+              min={1}
+              max={50}
+              value={rounds}
+              onChange={(e) => setRounds(Number(e.target.value))}
+            />
+            <label htmlFor="questions">Questions par manche</label>
+            <input
+              id="questions"
+              type="number"
+              min={1}
+              max={MAX_QUESTIONS_PER_ROUND}
+              value={questionsPerRound}
+              onChange={(e) => setQuestionsPerRound(Number(e.target.value))}
+            />
+            <p className="hint hint--compact">
+              Les questions s'affichent une par une. Tu passes à la suivante
+              directement après ta réponse, puis tu attends les autres à la fin.
+            </p>
+            {error && <p className="error">{error}</p>}
+            <button
+              className="btn btn-primary"
+              type="button"
+              disabled={busy || room.players.length < 2 || (room.selectedThemes?.length ?? 0) === 0}
+              onClick={handleStart}
+            >
+              Lancer la partie
+            </button>
+          </div>
+        ) : (
+          <div className="waiting-banner">
+            <p>En attente que l'hôte lance la partie...</p>
+          </div>
+        )}
+
+        <button className="btn btn-ghost" type="button" onClick={onLeave}>
+          Quitter la partie
+        </button>
       </div>
 
-      <ThemePicker
-        selectedThemes={room.selectedThemes ?? [...ALL_THEMES]}
-        isHost={isHost}
-        onChange={onSetThemes}
-      />
-
-      {isHost ? (
-        <div className="card">
-          <h2>Paramètres</h2>
-          <label htmlFor="rounds">Nombre de manches</label>
-          <input
-            id="rounds"
-            type="number"
-            min={1}
-            max={50}
-            value={rounds}
-            onChange={(e) => setRounds(Number(e.target.value))}
-          />
-          <label htmlFor="questions">Questions par manche</label>
-          <input
-            id="questions"
-            type="number"
-            min={1}
-            max={MAX_QUESTIONS_PER_ROUND}
-            value={questionsPerRound}
-            onChange={(e) => setQuestionsPerRound(Number(e.target.value))}
-          />
-          <p className="hint hint--compact">
-            Les questions s'affichent une par une. Tu passes à la suivante
-            directement après ta réponse, puis tu attends les autres à la fin.
-          </p>
-          {error && <p className="error">{error}</p>}
-          <button
-            className="btn btn-primary"
-            type="button"
-            disabled={busy || room.players.length < 2 || (room.selectedThemes?.length ?? 0) === 0}
-            onClick={handleStart}
-          >
-            Lancer la partie
-          </button>
-        </div>
-      ) : (
-        <div className="waiting-banner">
-          <p>En attente que l'hôte lance la partie...</p>
-        </div>
-      )}
-
-      <button className="btn btn-ghost" type="button" onClick={onLeave}>
-        Quitter la partie
-      </button>
-    </>
+      <aside className="lobby-sidebar" aria-label="Sélection des thèmes">
+        <ThemePicker
+          selectedThemes={room.selectedThemes ?? [...ALL_THEMES]}
+          isHost={isHost}
+          onChange={onSetThemes}
+        />
+      </aside>
+    </div>
   );
 }
 

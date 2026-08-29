@@ -180,6 +180,74 @@ h1 {
   min-height: 50vh;
 }
 
+.app:has(.lobby-layout) {
+  max-width: 860px;
+}
+
+.lobby-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 1rem;
+  align-items: start;
+}
+
+.lobby-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.lobby-sidebar {
+  position: sticky;
+  top: 1rem;
+}
+
+.theme-picker-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 6rem);
+  margin: 0;
+}
+
+.theme-picker-panel--readonly {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.theme-readonly-badge {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  margin-bottom: 0.5rem;
+}
+
+@media (max-width: 720px) {
+  .app:has(.lobby-layout) {
+    max-width: 440px;
+  }
+
+  .lobby-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .lobby-sidebar {
+    position: static;
+    order: -1;
+  }
+
+  .theme-picker-panel {
+    max-height: none;
+  }
+}
+
 /* ── Animations ── */
 .fade-in {
   animation: fade-in 0.5s var(--ease-out) both;
@@ -814,25 +882,32 @@ input[type="number"]:focus {
 
 .theme-picker-all {
   margin-bottom: 0.75rem;
+  align-self: flex-start;
 }
 
 .theme-grid {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
+  flex-direction: column;
+  gap: 0.4rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding-right: 0.15rem;
 }
 
 .theme-chip {
   font-family: inherit;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  padding: 0.35rem 0.65rem;
-  border-radius: 999px;
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.04);
   color: #9ca3af;
   cursor: pointer;
   transition: all 0.2s var(--ease-out);
+  text-align: left;
+  width: 100%;
 }
 
 .theme-chip:hover:not(:disabled) {
@@ -847,12 +922,17 @@ input[type="number"]:focus {
 }
 
 .theme-chip:disabled:not(.active) {
-  opacity: 0.45;
+  opacity: 0.5;
   cursor: default;
 }
 
 .theme-chip:disabled.active {
   cursor: default;
+  opacity: 1;
+}
+
+.theme-picker-panel--readonly .theme-chip:disabled {
+  pointer-events: none;
 }
 
 .question-hero {
