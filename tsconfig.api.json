@@ -9,5 +9,5 @@
     "resolveJsonModule": true,
     "moduleResolution": "node"
   },
-  "include": ["api/**/*.ts", "shared/**/*.ts", "under-cover/shared/**/*.ts"]
+  "include": ["api/**/*.ts", "shared/**/*.ts"]
 }
