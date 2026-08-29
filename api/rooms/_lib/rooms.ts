@@ -1,4 +1,5 @@
-import questionsData from "./questions.json";
+import { readFileSync } from "fs";
+import { join } from "path";
 import {
   buildChoices,
   createId,
@@ -10,10 +11,17 @@ import {
 import type { Player, RoomAction, RoomState } from "./types";
 import { getRoom, roomExists, saveRoom } from "./store";
 
-const QUESTIONS: string[] = questionsData.questions;
+function loadQuestions(): string[] {
+  const file = join(__dirname, "questions.json");
+  const data = JSON.parse(readFileSync(file, "utf-8")) as {
+    questions: string[];
+  };
+  return data.questions;
+}
 
 function assertQuestions() {
-  if (QUESTIONS.length < 4) {
+  const questions = loadQuestions();
+  if (questions.length < 4) {
     throw new Error("Il faut au moins 4 questions dans questions.json");
   }
 }
@@ -36,12 +44,13 @@ function allPlayersSubmitted(
 }
 
 function startRound(room: RoomState): RoomState {
-  const question = pickQuestion(QUESTIONS, room.usedQuestions);
+  const questions = loadQuestions();
+  const question = pickQuestion(questions, room.usedQuestions);
   if (!question) {
     return { ...room, phase: "game-end", round: null };
   }
 
-  const { choices } = buildChoices(question, QUESTIONS);
+  const { choices } = buildChoices(question, questions);
 
   return {
     ...room,

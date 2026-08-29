@@ -27,6 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erreur serveur";
-    return res.status(400).json({ error: message });
+    console.error("createRoom error:", err);
+    return res.status(500).json({ error: message });
   }
 }

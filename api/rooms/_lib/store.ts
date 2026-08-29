@@ -5,10 +5,14 @@ const memory = new Map<string, RoomState>();
 const TTL_SECONDS = 60 * 60 * 4;
 
 function getRedis(): Redis | null {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
-  return new Redis({ url, token });
+  try {
+    const url = process.env.UPSTASH_REDIS_REST_URL;
+    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (!url || !token) return null;
+    return new Redis({ url, token });
+  } catch {
+    return null;
+  }
 }
 
 export async function getRoom(code: string): Promise<RoomState | null> {
