@@ -3,7 +3,6 @@ import type { RoomAction, RoomState, Session } from "../../shared/types";
 import {
   clearSession,
   fetchRoom,
-  leaveRoomBeacon,
   saveSession,
   sendAction,
 } from "../api/client";
@@ -76,18 +75,6 @@ export function useRoom(
       clearInterval(id);
     };
   }, [session?.roomCode, session?.playerId, initialRoom]);
-
-  useEffect(() => {
-    if (!session) return;
-
-    const onUnload = () => {
-      if (leavingRef.current) return;
-      leaveRoomBeacon(session.roomCode, session.playerId);
-    };
-
-    window.addEventListener("beforeunload", onUnload);
-    return () => window.removeEventListener("beforeunload", onUnload);
-  }, [session?.roomCode, session?.playerId]);
 
   const dispatch = useCallback(
     async (action: RoomAction) => {
