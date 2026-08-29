@@ -6,17 +6,18 @@ const TTL_SECONDS = 60 * 60 * 4;
 
 function getRedis(): Redis | null {
   try {
-    if (
-      process.env.UPSTASH_REDIS_REST_URL &&
-      process.env.UPSTASH_REDIS_REST_TOKEN
-    ) {
-      return Redis.fromEnv();
+    const upstashUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
+    const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+    if (upstashUrl && upstashToken) {
+      return new Redis({ url: upstashUrl, token: upstashToken });
     }
-    const url = process.env.KV_REST_API_URL;
-    const token = process.env.KV_REST_API_TOKEN;
-    if (url && token) {
-      return new Redis({ url, token });
+
+    const kvUrl = process.env.KV_REST_API_URL?.trim();
+    const kvToken = process.env.KV_REST_API_TOKEN?.trim();
+    if (kvUrl && kvToken) {
+      return new Redis({ url: kvUrl, token: kvToken });
     }
+
     return null;
   } catch (err) {
     console.error("Redis init failed:", err);
