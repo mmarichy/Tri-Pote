@@ -241,6 +241,79 @@ h1 {
   min-height: 50vh;
 }
 
+/* ── Barre partie (quitter + code) ── */
+.game-top-bar-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  width: 100%;
+  background: rgba(10, 8, 22, 0.88);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+
+.game-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0.55rem 1rem;
+}
+
+.game-top-leave {
+  margin-top: 0;
+  flex-shrink: 0;
+  padding-left: 0;
+}
+
+.game-top-code {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+.game-top-code-value {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  min-width: 4.5ch;
+  text-align: right;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-icon:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--border-strong);
+}
+
+.btn-icon svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
 .app:has(.lobby-layout) {
   max-width: 860px;
 }
@@ -1343,7 +1416,7 @@ input[type="number"]:focus {
 /* ── Round info ── */
 .round-info {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   margin-bottom: 1rem;
   padding: 0.65rem 1rem;
@@ -1521,10 +1594,6 @@ input[type="number"]:focus {
 
 .guess-btn.wrong {
   opacity: 0.5;
-}
-
-.leave-btn {
-  margin-top: 1.25rem;
 }
 
 .pass-phone {
