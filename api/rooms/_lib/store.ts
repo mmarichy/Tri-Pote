@@ -6,11 +6,14 @@ const TTL_SECONDS = 60 * 60 * 4;
 
 function getRedis(): Redis | null {
   try {
-    const url = process.env.UPSTASH_REDIS_REST_URL;
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+    const url =
+      process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+    const token =
+      process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
     if (!url || !token) return null;
     return new Redis({ url, token });
-  } catch {
+  } catch (err) {
+    console.error("Redis init failed:", err);
     return null;
   }
 }
@@ -37,4 +40,8 @@ export async function saveRoom(room: RoomState): Promise<void> {
 export async function roomExists(code: string): Promise<boolean> {
   const room = await getRoom(code);
   return room !== null;
+}
+
+export function isRedisConfigured(): boolean {
+  return getRedis() !== null;
 }

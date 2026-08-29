@@ -41,7 +41,7 @@ function HomeScreen({
   onSession,
   initialCode,
 }: {
-  onSession: (s: Session) => void;
+  onSession: (s: Session, room?: RoomState) => void;
   initialCode?: string;
 }) {
   const [mode, setMode] = useState<"create" | "join">(
@@ -49,7 +49,7 @@ function HomeScreen({
   );
   const [name, setName] = useState("");
   const [code, setCode] = useState(initialCode ?? "");
-  const [codeChecked, setCodeChecked] = useState(false);
+  const [codeChecked, setCodeChecked] = useState<boolean | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -58,10 +58,11 @@ function HomeScreen({
 
     const normalized = normalizeRoomCode(code);
     if (normalized.length !== 4) {
-      setCodeChecked(false);
+      setCodeChecked(null);
       return;
     }
 
+    setCodeChecked(null);
     let active = true;
     fetchRoomMeta(normalized).then((meta) => {
       if (!active) return;
@@ -81,7 +82,7 @@ function HomeScreen({
       const { room, playerId } = await createRoom(name);
       const session = { roomCode: room.code, playerId };
       saveSession(session);
-      onSession(session);
+      onSession(session, room);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
     } finally {
@@ -105,7 +106,7 @@ function HomeScreen({
       if (!me) throw new Error("Joueur introuvable");
       const session = { roomCode: room.code, playerId: me.id };
       saveSession(session);
-      onSession(session);
+      onSession(session, room);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
     } finally {
@@ -176,8 +177,8 @@ function HomeScreen({
                 ))}
               </div>
             </div>
-            {code.length === 4 && !codeChecked && (
-              <p className="error">Salon introuvable</p>
+            {code.length === 4 && codeChecked === false && (
+              <p className="error">Salon introuvable — vérifie le code</p>
             )}
           </>
         )}
@@ -192,7 +193,7 @@ function HomeScreen({
           busy ||
           !name.trim() ||
           (mode === "join" &&
-            (normalizeRoomCode(code).length !== 4 || !codeChecked))
+            (normalizeRoomCode(code).length !== 4 || codeChecked !== true))
         }
         onClick={mode === "create" ? handleCreate : handleJoin}
       >
@@ -639,12 +640,14 @@ function GameEndScreen({
 
 function GameScreen({
   session,
+  initialRoom,
   onLeave,
 }: {
   session: Session;
+  initialRoom: RoomState | null;
   onLeave: () => void;
 }) {
-  const { room, error, loading, dispatch } = useRoom(session);
+  const { room, error, loading, dispatch } = useRoom(session, initialRoom);
 
   if (loading && !room) {
     return <div className="loading">Connexion à la partie...</div>;
@@ -758,11 +761,18 @@ export default function App() {
   const joinCode = params.get("room")?.toUpperCase() ?? undefined;
 
   const [session, setSession] = useState<Session | null>(() => loadSession());
+  const [initialRoom, setInitialRoom] = useState<RoomState | null>(null);
 
   const handleLeave = () => {
     clearSession();
     setSession(null);
+    setInitialRoom(null);
     window.history.replaceState({}, "", window.location.pathname);
+  };
+
+  const handleSession = (s: Session, room?: RoomState) => {
+    setSession(s);
+    setInitialRoom(room ?? null);
   };
 
   return (
@@ -771,12 +781,13 @@ export default function App() {
       <p className="subtitle">Salons privés entre potes — multijoueur</p>
 
       {session ? (
-        <GameScreen session={session} onLeave={handleLeave} />
-      ) : (
-        <HomeScreen
-          onSession={setSession}
-          initialCode={joinCode}
+        <GameScreen
+          session={session}
+          initialRoom={initialRoom}
+          onLeave={handleLeave}
         />
+      ) : (
+        <HomeScreen onSession={handleSession} initialCode={joinCode} />
       )}
     </div>
   );

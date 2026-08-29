@@ -2,10 +2,23 @@ import { useCallback, useEffect, useState } from "react";
 import type { RoomAction, RoomState, Session } from "../../shared/types";
 import { clearSession, fetchRoom, saveSession, sendAction } from "../api/client";
 
-export function useRoom(session: Session | null) {
-  const [room, setRoom] = useState<RoomState | null>(null);
+export function useRoom(
+  session: Session | null,
+  initialRoom: RoomState | null = null
+) {
+  const [room, setRoom] = useState<RoomState | null>(() => {
+    if (initialRoom && session && initialRoom.code === session.roomCode) {
+      return initialRoom;
+    }
+    return null;
+  });
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    if (initialRoom && session && initialRoom.code === session.roomCode) {
+      return false;
+    }
+    return Boolean(session);
+  });
 
   useEffect(() => {
     if (!session) {
@@ -14,8 +27,12 @@ export function useRoom(session: Session | null) {
       return;
     }
 
+    if (initialRoom && initialRoom.code === session.roomCode) {
+      setRoom(initialRoom);
+      setLoading(false);
+    }
+
     let active = true;
-    setLoading(true);
 
     const poll = async () => {
       try {
@@ -26,10 +43,13 @@ export function useRoom(session: Session | null) {
           setLoading(false);
         }
       } catch (err) {
-        if (active) {
+        if (!active) return;
+        setRoom((prev) => {
+          if (prev) return prev;
           setError(err instanceof Error ? err.message : "Erreur réseau");
           setLoading(false);
-        }
+          return null;
+        });
       }
     };
 
@@ -39,7 +59,7 @@ export function useRoom(session: Session | null) {
       active = false;
       clearInterval(id);
     };
-  }, [session?.roomCode]);
+  }, [session?.roomCode, initialRoom]);
 
   const dispatch = useCallback(
     async (action: RoomAction) => {
