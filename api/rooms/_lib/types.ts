@@ -1,5 +1,6 @@
 export type Phase =
   | "lobby"
+  | "round-intro"
   | "ranking"
   | "guess"
   | "round-end"
@@ -56,6 +57,7 @@ export type RoomAction =
   | { action: "leave"; playerId: string }
   | { action: "kick"; playerId: string; targetId: string }
   | { action: "start"; playerId: string; totalRounds: number; questionsPerRound: number }
+  | { action: "begin-votes"; playerId: string }
   | {
       action: "rank";
       playerId: string;

@@ -774,6 +774,25 @@ input[type="number"]:focus {
   letter-spacing: 0.08em;
 }
 
+.round-intro-title {
+  margin: 0 0 0.65rem;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.rules-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: #d1d5db;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.rules-list li + li {
+  margin-top: 0.35rem;
+}
+
 .question-hero {
   margin: 0;
   font-size: 1.4rem;

@@ -154,6 +154,21 @@ function sanitizeRoomForPlayer(room: RoomState, viewerId?: string): RoomState {
 
   const progress = buildProgress(room);
 
+  if (room.phase === "round-intro") {
+    return {
+      ...room,
+      round: room.round
+        ? {
+            ...room.round,
+            rankings: {},
+            guesses: {},
+            winners: undefined,
+            progress: buildProgress(room),
+          }
+        : null,
+    };
+  }
+
   if (room.phase === "ranking" && viewerId) {
     const own = room.round.rankings[viewerId];
     return {
@@ -358,7 +373,7 @@ async function persistRoom(room: RoomState | null, code: string): Promise<void> 
   await saveRoom(room);
 }
 
-function startRound(room: RoomState): RoomState {
+function prepareRound(room: RoomState): RoomState {
   const pool = loadQuestions();
   const roundQuestions: QuestionItem[] = [];
   const used = [...room.usedQuestions];
@@ -377,14 +392,26 @@ function startRound(room: RoomState): RoomState {
 
   return {
     ...room,
-    phase: "ranking",
+    phase: "round-intro",
     usedQuestions: used,
     round: {
       questions: roundQuestions,
       rankings: {},
       guesses: {},
-      rankingDeadline:
-        Date.now() + RANKING_TIMEOUT_MS * roundQuestions.length,
+      rankingDeadline: 0,
+    },
+  };
+}
+
+function beginRankingPhase(room: RoomState): RoomState {
+  if (!room.round) return room;
+  const qCount = room.round.questions.length;
+  return {
+    ...room,
+    phase: "ranking",
+    round: {
+      ...room.round,
+      rankingDeadline: Date.now() + RANKING_TIMEOUT_MS * qCount,
     },
   };
 }
@@ -517,7 +544,19 @@ export async function handleAction(
       room.currentRound = 1;
       room.players = room.players.map((p) => ({ ...p, score: 0 }));
       room.usedQuestions = [];
-      const next = startRound(room);
+      const next = prepareRound(room);
+      await saveRoom(next);
+      return next;
+    }
+
+    case "begin-votes": {
+      if (!isHost(room, payload.playerId)) {
+        throw new Error("Seul l'hôte peut lancer les votes");
+      }
+      if (room.phase !== "round-intro" || !room.round) {
+        throw new Error("Phase invalide");
+      }
+      const next = beginRankingPhase(room);
       await saveRoom(next);
       return next;
     }
@@ -626,7 +665,7 @@ export async function handleAction(
       }
 
       room.currentRound += 1;
-      const next = startRound(room);
+      const next = prepareRound(room);
       await saveRoom(next);
       return next;
     }

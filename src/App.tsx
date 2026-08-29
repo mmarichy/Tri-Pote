@@ -331,6 +331,93 @@ function LobbyScreen({
   );
 }
 
+function RoundIntroScreen({
+  room,
+  playerId,
+  isHost,
+  onBeginVotes,
+}: {
+  room: RoomState;
+  playerId: string;
+  isHost: boolean;
+  onBeginVotes: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const questionCount = room.round?.questions.length ?? room.questionsPerRound;
+
+  return (
+    <>
+      <div className="card card-highlight">
+        <p className="phase-label">Manche {room.currentRound} / {room.totalRounds}</p>
+        <h2 className="round-intro-title">Prêt pour les votes ?</h2>
+        <p className="hint">
+          Cette manche compte <strong>{questionCount} question{questionCount !== 1 ? "s" : ""}</strong>.
+          Les questions restent secrètes jusqu'au lancement.
+        </p>
+      </div>
+
+      <div className="card">
+        <h2>Joueurs</h2>
+        <ul className="player-list stagger-in">
+          {[...room.players]
+            .sort((a, b) => b.score - a.score)
+            .map((p) => (
+              <li key={p.id} className="player-chip">
+                <span>
+                  {p.name}
+                  {p.id === room.hostId && " 👑"}
+                  {p.id === playerId && " (toi)"}
+                </span>
+                {room.currentRound > 1 && (
+                  <span className="score">
+                    {p.score} pt{p.score !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </li>
+            ))}
+        </ul>
+      </div>
+
+      <div className="card">
+        <h2>Rappel</h2>
+        <ul className="rules-list">
+          <li>Phase 1 — Vote pour un joueur par question</li>
+          <li>Phase 2 — Devine qui a été le plus voté (+1 pt)</li>
+          <li>Les questions s'enchaînent une par une à ton rythme</li>
+        </ul>
+      </div>
+
+      {error && <p className="error">{error}</p>}
+
+      {isHost ? (
+        <button
+          className="btn btn-primary"
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            setError("");
+            try {
+              await onBeginVotes();
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Erreur");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Lancer les votes →
+        </button>
+      ) : (
+        <div className="waiting-banner">
+          <p>En attente que l'hôte lance les votes…</p>
+        </div>
+      )}
+    </>
+  );
+}
+
 function CountdownTimer({ deadline }: { deadline: number }) {
   const [remaining, setRemaining] = useState(() =>
     Math.max(0, deadline - Date.now())
@@ -799,6 +886,20 @@ function GameScreen({
             });
           }}
           onLeave={handleLeave}
+        />
+      )}
+
+      {room.phase === "round-intro" && (
+        <RoundIntroScreen
+          room={room}
+          playerId={session.playerId}
+          isHost={isHost}
+          onBeginVotes={async () => {
+            await dispatch({
+              action: "begin-votes",
+              playerId: session.playerId,
+            });
+          }}
         />
       )}
 
