@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   clearSession,
   createRoom,
@@ -45,6 +45,27 @@ function GameTopBar({
   onLeave: () => void | Promise<void>;
 }) {
   const [codeVisible, setCodeVisible] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    },
+    []
+  );
+
+  const handleCopyCode = async () => {
+    if (!codeVisible || copied) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* presse-papiers indisponible */
+    }
+  };
 
   return (
     <div className="game-top-bar">
@@ -52,9 +73,16 @@ function GameTopBar({
         Quitter la partie
       </button>
       <div className="game-top-code">
-        <span className="game-top-code-value">
-          {codeVisible ? code : "••••"}
-        </span>
+        <button
+          type="button"
+          className={`game-top-code-value${codeVisible ? " game-top-code-value--clickable" : ""}${copied ? " game-top-code-value--copied" : ""}`}
+          onClick={handleCopyCode}
+          disabled={!codeVisible}
+          aria-label={copied ? "Code copié" : "Copier le code du salon"}
+          title={codeVisible ? "Cliquer pour copier" : undefined}
+        >
+          {copied ? "Copié !" : codeVisible ? code : "••••"}
+        </button>
         <button
           type="button"
           className="btn-icon btn-icon-eye"
