@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   clearSession,
   createRoom,
@@ -17,82 +17,29 @@ import { DEFAULT_QUESTIONS_PER_ROUND, MAX_QUESTIONS_PER_ROUND } from "./types";
 import { ALL_THEMES } from "../shared/themes";
 import { useRoom } from "./hooks/useRoom";
 import type { Player, RoomState, Session } from "./types";
-import { clearRoomUrl, getRoomCodeFromUrl, redirectQueryRoomToPath, setRoomUrl } from "./url";
+import { clearRoomUrl, getRoomCodeFromUrl, redirectQueryRoomToPath, roomUrl, setRoomUrl } from "./url";
 
-function IconEye({ open }: { open: boolean }) {
-  if (open) {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-      <line x1="1" y1="1" x2="23" y2="23" />
-    </svg>
-  );
-}
+function RoomCodeBanner({ code }: { code: string }) {
+  const link = roomUrl(code);
 
-function GameTopBar({
-  code,
-  onLeave,
-}: {
-  code: string;
-  onLeave: () => void | Promise<void>;
-}) {
-  const [codeVisible, setCodeVisible] = useState(true);
-  const [copied, setCopied] = useState(false);
-  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-    },
-    []
-  );
-
-  const handleCopyCode = async () => {
-    if (!codeVisible || copied) return;
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* presse-papiers indisponible */
-    }
-  };
+  const copyCode = () => navigator.clipboard.writeText(code);
+  const copyLink = () => navigator.clipboard.writeText(link);
 
   return (
-    <div className="game-top-bar">
-      <button className="btn btn-ghost btn-sm game-top-leave" type="button" onClick={onLeave}>
-        Quitter la partie
-      </button>
-      <div className="game-top-code">
-        <button
-          type="button"
-          className={`game-top-code-value${codeVisible ? " game-top-code-value--clickable" : ""}${copied ? " game-top-code-value--copied" : ""}`}
-          onClick={handleCopyCode}
-          disabled={!codeVisible}
-          aria-label={copied ? "Code copié" : "Copier le code du salon"}
-          title={codeVisible ? "Cliquer pour copier" : undefined}
-        >
-          {copied ? "Copié !" : codeVisible ? code : "••••"}
+    <div className="room-code">
+      <p className="room-code-label">Salon privé — code unique</p>
+      <p className="room-code-value">{code}</p>
+      <div className="room-code-actions">
+        <button className="btn btn-secondary btn-sm" type="button" onClick={copyCode}>
+          Copier le code
         </button>
-        <button
-          type="button"
-          className="btn-icon btn-icon-eye"
-          aria-label={codeVisible ? "Masquer le code" : "Afficher le code"}
-          aria-pressed={codeVisible}
-          onClick={() => setCodeVisible((v) => !v)}
-        >
-          <IconEye open={codeVisible} />
+        <button className="btn btn-secondary btn-sm" type="button" onClick={copyLink}>
+          Copier le lien
         </button>
       </div>
+      <p className="hint">
+        Partage ce code à tes potes pour qu'ils rejoignent le salon.
+      </p>
     </div>
   );
 }
@@ -358,6 +305,7 @@ function LobbyScreen({
   onStart,
   onSetThemes,
   onKick,
+  onLeave,
 }: {
   room: RoomState;
   playerId: string;
@@ -365,6 +313,7 @@ function LobbyScreen({
   onStart: (rounds: number, questionsPerRound: number) => Promise<void>;
   onSetThemes: (themes: string[]) => Promise<void>;
   onKick: (targetId: string) => Promise<void>;
+  onLeave: () => void;
 }) {
   const [rounds, setRounds] = useState(room.totalRounds);
   const [questionsPerRound, setQuestionsPerRound] = useState(
@@ -389,6 +338,8 @@ function LobbyScreen({
   return (
     <div className="lobby-layout">
       <div className="lobby-main">
+        <RoomCodeBanner code={room.code} />
+
         <div className="card">
           <h2>Joueurs ({room.players.length})</h2>
           <ul className="player-list stagger-in">
@@ -465,6 +416,9 @@ function LobbyScreen({
           </div>
         )}
 
+        <button className="btn btn-ghost" type="button" onClick={onLeave}>
+          Quitter la partie
+        </button>
       </div>
 
       <aside className="lobby-sidebar" aria-label="Sélection des thèmes">
@@ -977,10 +931,12 @@ function GameEndScreen({
   players,
   isHost,
   onRestart,
+  onLeave,
 }: {
   players: Player[];
   isHost: boolean;
   onRestart: () => Promise<void>;
+  onLeave: () => void;
 }) {
   const sorted = [...players].sort((a, b) => b.score - a.score);
   const [busy, setBusy] = useState(false);
@@ -1027,6 +983,10 @@ function GameEndScreen({
           Nouvelle partie
         </button>
       )}
+
+      <button className="btn btn-ghost" type="button" onClick={onLeave}>
+        Quitter
+      </button>
     </div>
   );
 }
@@ -1080,6 +1040,7 @@ function GameScreen({
             Manche <span className="highlight">{room.currentRound}</span> /{" "}
             {room.totalRounds}
           </span>
+          <span className="room-pill">{room.code}</span>
         </div>
       )}
 
@@ -1111,6 +1072,7 @@ function GameScreen({
               targetId,
             });
           }}
+          onLeave={handleLeave}
         />
       )}
 
@@ -1190,7 +1152,18 @@ function GameScreen({
           onRestart={async () => {
             await dispatch({ action: "restart", playerId: session.playerId });
           }}
+          onLeave={handleLeave}
         />
+      )}
+
+      {room.phase !== "lobby" && room.phase !== "game-end" && (
+        <button
+          className="btn btn-ghost leave-btn fade-in"
+          type="button"
+          onClick={handleLeave}
+        >
+          Quitter la partie
+        </button>
       )}
       </div>
     </>
@@ -1220,20 +1193,6 @@ export default function App() {
     clearRoomUrl();
   };
 
-  const handleGameLeave = async () => {
-    if (session) {
-      try {
-        await sendAction(session.roomCode, {
-          action: "leave",
-          playerId: session.playerId,
-        });
-      } catch {
-        /* salon déjà fermé ou réseau coupé */
-      }
-    }
-    handleLeave();
-  };
-
   const handleSession = (s: Session, room?: RoomState) => {
     setSession(s);
     setInitialRoom(room ?? null);
@@ -1251,20 +1210,14 @@ export default function App() {
       <div className="bg-grid" aria-hidden="true" />
       <div className="bg-noise" aria-hidden="true" />
 
-      {session && (
-        <GameTopBar code={session.roomCode} onLeave={handleGameLeave} />
-      )}
-
-      <div className={`app${session ? " app--in-game" : ""}`}>
-        {!session && (
-          <header className="app-header fade-in">
-            <div className="logo-mark">🎲</div>
-            <div>
-              <h1>Tri-Pote</h1>
-              <p className="subtitle">Salons privés entre potes — multijoueur</p>
-            </div>
-          </header>
-        )}
+      <div className="app">
+        <header className="app-header fade-in">
+          <div className="logo-mark">🎲</div>
+          <div>
+            <h1>Tri-Pote</h1>
+            <p className="subtitle">Salons privés entre potes — multijoueur</p>
+          </div>
+        </header>
 
         <main className="app-main">
           {session ? (
