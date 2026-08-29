@@ -47,25 +47,23 @@ function GameTopBar({
   const [codeVisible, setCodeVisible] = useState(true);
 
   return (
-    <div className="game-top-bar-wrap">
-      <div className="game-top-bar">
-        <button className="btn btn-ghost btn-sm game-top-leave" type="button" onClick={onLeave}>
-          Quitter la partie
+    <div className="game-top-bar">
+      <button className="btn btn-ghost btn-sm game-top-leave" type="button" onClick={onLeave}>
+        Quitter la partie
+      </button>
+      <div className="game-top-code">
+        <span className="game-top-code-value">
+          {codeVisible ? code : "••••"}
+        </span>
+        <button
+          type="button"
+          className="btn-icon btn-icon-eye"
+          aria-label={codeVisible ? "Masquer le code" : "Afficher le code"}
+          aria-pressed={codeVisible}
+          onClick={() => setCodeVisible((v) => !v)}
+        >
+          <IconEye open={codeVisible} />
         </button>
-        <div className="game-top-code">
-          <span className="game-top-code-value">
-            {codeVisible ? code : "••••"}
-          </span>
-          <button
-            type="button"
-            className="btn-icon btn-icon-eye"
-            aria-label={codeVisible ? "Masquer le code" : "Afficher le code"}
-            aria-pressed={codeVisible}
-            onClick={() => setCodeVisible((v) => !v)}
-          >
-            <IconEye open={codeVisible} />
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -1229,14 +1227,16 @@ export default function App() {
         <GameTopBar code={session.roomCode} onLeave={handleGameLeave} />
       )}
 
-      <div className="app">
-        <header className="app-header fade-in">
-          <div className="logo-mark">🎲</div>
-          <div>
-            <h1>Tri-Pote</h1>
-            <p className="subtitle">Salons privés entre potes — multijoueur</p>
-          </div>
-        </header>
+      <div className={`app${session ? " app--in-game" : ""}`}>
+        {!session && (
+          <header className="app-header fade-in">
+            <div className="logo-mark">🎲</div>
+            <div>
+              <h1>Tri-Pote</h1>
+              <p className="subtitle">Salons privés entre potes — multijoueur</p>
+            </div>
+          </header>
+        )}
 
         <main className="app-main">
           {session ? (

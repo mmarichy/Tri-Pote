@@ -185,6 +185,10 @@ body::before {
   position: relative;
 }
 
+.app--in-game {
+  padding-top: 2.75rem;
+}
+
 .app-header {
   display: flex;
   align-items: center;
@@ -242,30 +246,29 @@ h1 {
 }
 
 /* ── Barre partie (quitter + code) ── */
-.game-top-bar-wrap {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  width: 100%;
-  background: rgba(10, 8, 22, 0.88);
-  backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--border);
-}
-
 .game-top-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 0.55rem 1rem;
+  padding: 0.65rem 1rem;
+  pointer-events: none;
+}
+
+.game-top-bar > * {
+  pointer-events: auto;
 }
 
 .game-top-leave {
   margin-top: 0;
   flex-shrink: 0;
   padding-left: 0;
+  text-align: left;
 }
 
 .game-top-code {
