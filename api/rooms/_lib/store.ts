@@ -45,6 +45,16 @@ export async function saveRoom(room: RoomState): Promise<void> {
   memory.set(room.code, room);
 }
 
+export async function deleteRoom(code: string): Promise<void> {
+  const redis = getRedis();
+  const key = `room:${code}`;
+  if (redis) {
+    await redis.del(key);
+    return;
+  }
+  memory.delete(code);
+}
+
 export async function roomExists(code: string): Promise<boolean> {
   const room = await getRoom(code);
   return room !== null;

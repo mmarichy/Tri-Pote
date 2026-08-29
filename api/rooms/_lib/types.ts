@@ -17,6 +17,7 @@ export interface RoundState {
   choices: string[];
   rankings: Record<string, string[]>;
   guesses: Record<string, string>;
+  rankingDeadline: number;
 }
 
 export interface RoomState {
@@ -30,8 +31,12 @@ export interface RoomState {
   round: RoundState | null;
 }
 
+export const RANKING_TIMEOUT_MS = 60_000;
+
 export type RoomAction =
   | { action: "join"; name: string }
+  | { action: "leave"; playerId: string }
+  | { action: "kick"; playerId: string; targetId: string }
   | { action: "start"; playerId: string; totalRounds: number }
   | { action: "rank"; playerId: string; order: string[] }
   | { action: "continue"; playerId: string }

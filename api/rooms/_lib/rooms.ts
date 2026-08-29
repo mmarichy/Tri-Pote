@@ -8,9 +8,11 @@ import {
   isValidRoomCode,
   normalizeRoomCode,
   pickQuestion,
+  shuffle,
 } from "./game.js";
 import type { Player, RoomAction, RoomState } from "./types.js";
-import { getRoom, roomExists, saveRoom } from "./store.js";
+import { RANKING_TIMEOUT_MS } from "./types.js";
+import { deleteRoom, getRoom, roomExists, saveRoom } from "./store.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 
@@ -46,6 +48,95 @@ function allPlayersSubmitted(
   return submitted.length >= room.players.length;
 }
 
+function removePlayerFromRoom(
+  room: RoomState,
+  playerId: string
+): RoomState | null {
+  if (!findPlayer(room, playerId)) return room;
+
+  const players = room.players.filter((p) => p.id !== playerId);
+  if (players.length === 0) return null;
+
+  let hostId = room.hostId;
+  if (hostId === playerId) {
+    hostId = players[0].id;
+  }
+
+  let next: RoomState = { ...room, players, hostId };
+
+  if (next.round) {
+    const rankings: Record<string, string[]> = {};
+    for (const [pid, order] of Object.entries(next.round.rankings)) {
+      if (pid === playerId) continue;
+      rankings[pid] = order.filter((id) => id !== playerId);
+    }
+
+    const guesses: Record<string, string> = {};
+    for (const [pid, guess] of Object.entries(next.round.guesses)) {
+      if (pid !== playerId) guesses[pid] = guess;
+    }
+
+    next = {
+      ...next,
+      round: { ...next.round, rankings, guesses },
+    };
+  }
+
+  if (
+    players.length < 2 &&
+    next.phase !== "lobby" &&
+    next.phase !== "game-end"
+  ) {
+    next = {
+      ...next,
+      phase: "lobby",
+      currentRound: 0,
+      usedQuestions: [],
+      round: null,
+      players: players.map((p) => ({ ...p, score: 0 })),
+    };
+  } else if (next.phase === "ranking" && next.round) {
+    if (allPlayersSubmitted(next, "rankings")) {
+      next.phase = "reveal";
+    }
+  } else if (next.phase === "guess" && next.round) {
+    if (allPlayersSubmitted(next, "guesses")) {
+      const correct = next.round.question;
+      next.players = next.players.map((p) => {
+        if (next.round!.guesses[p.id] === correct) {
+          return { ...p, score: p.score + 1 };
+        }
+        return p;
+      });
+      next.phase = "round-end";
+    }
+  }
+
+  return next;
+}
+
+function applyRankingTimeout(room: RoomState): RoomState {
+  if (room.phase !== "ranking" || !room.round) return room;
+  if (Date.now() < room.round.rankingDeadline) return room;
+
+  const playerIds = room.players.map((p) => p.id);
+  for (const player of room.players) {
+    if (!room.round.rankings[player.id]) {
+      room.round.rankings[player.id] = shuffle([...playerIds]);
+    }
+  }
+  room.phase = "reveal";
+  return room;
+}
+
+async function persistRoom(room: RoomState | null, code: string): Promise<void> {
+  if (!room) {
+    await deleteRoom(code);
+    return;
+  }
+  await saveRoom(room);
+}
+
 function startRound(room: RoomState): RoomState {
   const questions = loadQuestions();
   const question = pickQuestion(questions, room.usedQuestions);
@@ -64,6 +155,7 @@ function startRound(room: RoomState): RoomState {
       choices,
       rankings: {},
       guesses: {},
+      rankingDeadline: Date.now() + RANKING_TIMEOUT_MS,
     },
   };
 }
@@ -108,8 +200,14 @@ export async function handleAction(
     throw new Error("Code de salon invalide");
   }
 
-  const room = await getRoom(normalized);
+  let room = await getRoom(normalized);
   if (!room) throw new Error("Salon introuvable");
+
+  const afterTimeout = applyRankingTimeout(room);
+  if (afterTimeout !== room) {
+    await saveRoom(afterTimeout);
+    room = afterTimeout;
+  }
 
   switch (payload.action) {
     case "join": {
@@ -128,6 +226,35 @@ export async function handleAction(
       room.players.push({ id: createId(), name, score: 0 });
       await saveRoom(room);
       return room;
+    }
+
+    case "leave": {
+      if (!findPlayer(room, payload.playerId)) {
+        throw new Error("Joueur inconnu");
+      }
+      const next = removePlayerFromRoom(room, payload.playerId);
+      await persistRoom(next, normalized);
+      if (!next) throw new Error("Salon fermé");
+      return next;
+    }
+
+    case "kick": {
+      if (!isHost(room, payload.playerId)) {
+        throw new Error("Seul l'hôte peut expulser un joueur");
+      }
+      if (room.phase !== "lobby") {
+        throw new Error("Impossible d'expulser en pleine partie");
+      }
+      if (payload.targetId === payload.playerId) {
+        throw new Error("Tu ne peux pas t'expulser toi-même");
+      }
+      if (!findPlayer(room, payload.targetId)) {
+        throw new Error("Joueur introuvable");
+      }
+      const next = removePlayerFromRoom(room, payload.targetId);
+      await persistRoom(next, normalized);
+      if (!next) throw new Error("Salon fermé");
+      return next;
     }
 
     case "start": {
@@ -273,6 +400,12 @@ export async function getRoomState(code: string): Promise<RoomState> {
   }
   const room = await getRoom(normalized);
   if (!room) throw new Error("Salon introuvable");
+
+  const timed = applyRankingTimeout(room);
+  if (timed !== room) {
+    await saveRoom(timed);
+    return timed;
+  }
   return room;
 }
 

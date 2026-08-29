@@ -170,6 +170,47 @@ input[type="number"] {
   padding: 0 0.25rem;
 }
 
+.btn-kick {
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  color: #fca5a5;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.55rem;
+  border-radius: 0.45rem;
+}
+
+.btn-kick:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.timer {
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #c4b5fd;
+  padding: 0.65rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: 0.75rem;
+  background: rgba(167, 139, 250, 0.12);
+  border: 1px solid rgba(167, 139, 250, 0.3);
+}
+
+.timer-urgent {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.4);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.75;
+  }
+}
+
 .pass-phone {
   text-align: center;
   padding: 1.5rem 0;

@@ -81,3 +81,14 @@ export async function sendAction(
   const data = (await res.json()) as { room: RoomState };
   return data.room;
 }
+
+export function leaveRoomBeacon(code: string, playerId: string): void {
+  const normalized = normalizeRoomCode(code);
+  const body = JSON.stringify({ action: "leave", playerId });
+  fetch(`/api/rooms/${normalized}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+    keepalive: true,
+  }).catch(() => {});
+}

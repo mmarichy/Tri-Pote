@@ -11,9 +11,10 @@ import { normalizeRoomCode } from "../shared/game";
 import { useRoom } from "./hooks/useRoom";
 import { aggregateRankings } from "./types";
 import type { Player, RoomState, Session } from "./types";
+import { clearRoomUrl, getRoomCodeFromUrl, redirectQueryRoomToPath, roomUrl, setRoomUrl } from "./url";
 
 function RoomCodeBanner({ code }: { code: string }) {
-  const link = `${window.location.origin}?room=${code}`;
+  const link = roomUrl(code);
 
   const copyCode = () => navigator.clipboard.writeText(code);
   const copyLink = () => navigator.clipboard.writeText(link);
@@ -208,17 +209,20 @@ function LobbyScreen({
   playerId,
   isHost,
   onStart,
+  onKick,
   onLeave,
 }: {
   room: RoomState;
   playerId: string;
   isHost: boolean;
   onStart: (rounds: number) => Promise<void>;
+  onKick: (targetId: string) => Promise<void>;
   onLeave: () => void;
 }) {
   const [rounds, setRounds] = useState(room.totalRounds);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [kickingId, setKickingId] = useState<string | null>(null);
 
   const handleStart = async () => {
     setBusy(true);
@@ -246,6 +250,26 @@ function LobbyScreen({
                 {p.id === room.hostId && " 👑"}
                 {p.id === playerId && " (toi)"}
               </span>
+              {isHost && p.id !== playerId && (
+                <button
+                  className="btn-kick"
+                  type="button"
+                  disabled={kickingId === p.id}
+                  onClick={async () => {
+                    setKickingId(p.id);
+                    setError("");
+                    try {
+                      await onKick(p.id);
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Erreur");
+                    } finally {
+                      setKickingId(null);
+                    }
+                  }}
+                >
+                  Expulser
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -283,6 +307,28 @@ function LobbyScreen({
         Quitter la partie
       </button>
     </>
+  );
+}
+
+function CountdownTimer({ deadline }: { deadline: number }) {
+  const [remaining, setRemaining] = useState(() =>
+    Math.max(0, deadline - Date.now())
+  );
+
+  useEffect(() => {
+    const tick = () => setRemaining(Math.max(0, deadline - Date.now()));
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [deadline]);
+
+  const seconds = Math.ceil(remaining / 1000);
+  const urgent = seconds <= 10;
+
+  return (
+    <div className={`timer ${urgent ? "timer-urgent" : ""}`}>
+      ⏱ {seconds}s pour classer
+    </div>
   );
 }
 
@@ -335,6 +381,9 @@ function RankingScreen({
 
   return (
     <>
+      {room.round?.rankingDeadline && (
+        <CountdownTimer deadline={room.round.rankingDeadline} />
+      )}
       <div className="card">
         <h2>Classe les joueurs</h2>
         <p className="hint">
@@ -647,7 +696,12 @@ function GameScreen({
   initialRoom: RoomState | null;
   onLeave: () => void;
 }) {
-  const { room, error, loading, dispatch } = useRoom(session, initialRoom);
+  const { room, error, loading, dispatch, leave } = useRoom(session, initialRoom);
+
+  const handleLeave = async () => {
+    await leave();
+    onLeave();
+  };
 
   if (loading && !room) {
     return <div className="loading">Connexion à la partie...</div>;
@@ -657,7 +711,7 @@ function GameScreen({
     return (
       <>
         <p className="error">{error || "Partie introuvable"}</p>
-        <button className="btn btn-primary" type="button" onClick={onLeave}>
+        <button className="btn btn-primary" type="button" onClick={handleLeave}>
           Retour
         </button>
       </>
@@ -693,7 +747,14 @@ function GameScreen({
               totalRounds,
             });
           }}
-          onLeave={onLeave}
+          onKick={async (targetId) => {
+            await dispatch({
+              action: "kick",
+              playerId: session.playerId,
+              targetId,
+            });
+          }}
+          onLeave={handleLeave}
         />
       )}
 
@@ -749,7 +810,7 @@ function GameScreen({
           onRestart={async () => {
             await dispatch({ action: "restart", playerId: session.playerId });
           }}
-          onLeave={onLeave}
+          onLeave={handleLeave}
         />
       )}
     </>
@@ -757,22 +818,32 @@ function GameScreen({
 }
 
 export default function App() {
-  const params = new URLSearchParams(window.location.search);
-  const joinCode = params.get("room")?.toUpperCase() ?? undefined;
+  redirectQueryRoomToPath();
+  const joinCode = getRoomCodeFromUrl();
 
-  const [session, setSession] = useState<Session | null>(() => loadSession());
+  const [session, setSession] = useState<Session | null>(() => {
+    const saved = loadSession();
+    if (!saved) return null;
+    if (joinCode && saved.roomCode !== joinCode) return null;
+    return saved;
+  });
   const [initialRoom, setInitialRoom] = useState<RoomState | null>(null);
+
+  useEffect(() => {
+    if (session) setRoomUrl(session.roomCode);
+  }, [session]);
 
   const handleLeave = () => {
     clearSession();
     setSession(null);
     setInitialRoom(null);
-    window.history.replaceState({}, "", window.location.pathname);
+    clearRoomUrl();
   };
 
   const handleSession = (s: Session, room?: RoomState) => {
     setSession(s);
     setInitialRoom(room ?? null);
+    setRoomUrl(s.roomCode);
   };
 
   return (

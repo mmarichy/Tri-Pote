@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { RoomAction, RoomState, Session } from "../../shared/types";
-import { clearSession, fetchRoom, saveSession, sendAction } from "../api/client";
+import {
+  clearSession,
+  fetchRoom,
+  leaveRoomBeacon,
+  saveSession,
+  sendAction,
+} from "../api/client";
 
 export function useRoom(
   session: Session | null,
@@ -19,6 +25,7 @@ export function useRoom(
     }
     return Boolean(session);
   });
+  const leavingRef = useRef(false);
 
   useEffect(() => {
     if (!session) {
@@ -37,11 +44,20 @@ export function useRoom(
     const poll = async () => {
       try {
         const data = await fetchRoom(session.roomCode);
-        if (active) {
-          setRoom(data);
-          setError("");
+        if (!active) return;
+
+        const stillInRoom = data.players.some((p) => p.id === session.playerId);
+        if (!stillInRoom) {
+          clearSession();
+          setRoom(null);
+          setError("Tu n'es plus dans ce salon");
           setLoading(false);
+          return;
         }
+
+        setRoom(data);
+        setError("");
+        setLoading(false);
       } catch (err) {
         if (!active) return;
         setRoom((prev) => {
@@ -61,6 +77,18 @@ export function useRoom(
     };
   }, [session?.roomCode, initialRoom]);
 
+  useEffect(() => {
+    if (!session) return;
+
+    const onPageHide = () => {
+      if (leavingRef.current) return;
+      leaveRoomBeacon(session.roomCode, session.playerId);
+    };
+
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, [session?.roomCode, session?.playerId]);
+
   const dispatch = useCallback(
     async (action: RoomAction) => {
       if (!session) return;
@@ -72,10 +100,21 @@ export function useRoom(
     [session]
   );
 
-  const leave = useCallback(() => {
+  const leave = useCallback(async () => {
+    leavingRef.current = true;
+    if (session) {
+      try {
+        await sendAction(session.roomCode, {
+          action: "leave",
+          playerId: session.playerId,
+        });
+      } catch {
+        /* salon déjà fermé ou réseau coupé */
+      }
+    }
     clearSession();
     setRoom(null);
-  }, []);
+  }, [session]);
 
   const persist = useCallback((next: Session) => {
     saveSession(next);
