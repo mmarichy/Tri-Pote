@@ -6,12 +6,18 @@ const TTL_SECONDS = 60 * 60 * 4;
 
 function getRedis(): Redis | null {
   try {
-    const url =
-      process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-    const token =
-      process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
-    if (!url || !token) return null;
-    return new Redis({ url, token });
+    if (
+      process.env.UPSTASH_REDIS_REST_URL &&
+      process.env.UPSTASH_REDIS_REST_TOKEN
+    ) {
+      return Redis.fromEnv();
+    }
+    const url = process.env.KV_REST_API_URL;
+    const token = process.env.KV_REST_API_TOKEN;
+    if (url && token) {
+      return new Redis({ url, token });
+    }
+    return null;
   } catch (err) {
     console.error("Redis init failed:", err);
     return null;
@@ -34,14 +40,11 @@ export async function saveRoom(room: RoomState): Promise<void> {
     await redis.set(key, room, { ex: TTL_SECONDS });
     return;
   }
+  console.warn("Redis non configuré — stockage mémoire local (dev uniquement)");
   memory.set(room.code, room);
 }
 
 export async function roomExists(code: string): Promise<boolean> {
   const room = await getRoom(code);
   return room !== null;
-}
-
-export function isRedisConfigured(): boolean {
-  return getRedis() !== null;
 }
